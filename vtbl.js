@@ -30,13 +30,20 @@ class vftableHelper {
         return this.get().readPointer();
     }
 
-    attach() {
+    replace() {
         this.get().writePointer( this.#vftable_shadow_[1] );
     }
 
     revert() {
         this.get().writePointer( this.#vftable_shadow_[0] );
         this.#vftable_shadow_[1] = NULL;
+    }
+
+    override_vftable_from_ordinal(fndetour, vfidx) {
+        let ptablefn = this.vftable().add( vfidx * Process.pageSize );
+        let fnoriginal = ptablefn.readPointer();
+        ptablefn.writePointer(fndetour);
+        return fnoriginal;
     }
 
     #vftable_count(limit_count=0) {
