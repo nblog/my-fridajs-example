@@ -12,19 +12,20 @@
 /* Virtual Table Swap (VTableSwap) */
 class vftableHelper {
 
+    #vftable_ptr_ = NULL;
     #vftable_shadow_ = [ NULL, NULL ];
 
-    constructor(instance) {
-        this.this_ptr_ = ptr(instance);
+    constructor(instance, limit_count=0) {
+        this.#vftable_ptr_ = ptr(instance);
 
         /* vftable dump */
         this.#vftable_shadow_[0] = this.vftable();
         this.#vftable_shadow_[1] = Memory.dup(
             this.vftable(), 
-            Process.pointerSize * this.#vftable_count());
+            Process.pointerSize * this.#vftable_count(limit_count));
     }
 
-    get() { return this.this_ptr_; }
+    get() { return this.#vftable_ptr_; }
 
     vftable() {
         return this.get().readPointer();
@@ -40,7 +41,7 @@ class vftableHelper {
     }
 
     override_vftable_from_ordinal(fndetour, vfidx) {
-        let ptablefn = this.vftable().add( vfidx * Process.pageSize );
+        let ptablefn = this.vftable().add( vfidx * Process.pointerSize );
         let fnoriginal = ptablefn.readPointer();
         ptablefn.writePointer(fndetour);
         return fnoriginal;
@@ -54,7 +55,7 @@ class vftableHelper {
 
         let count_ = 0; 
         do {
-            let empty_ = this.vftable().add( count_ *  Process.pointerSize).readPointer();
+            let empty_ = this.vftable().add( count_ *  Process.pointerSize ).readPointer();
             /* eof */
             if (empty_.isNull() || null == Process.findRangeByAddress(empty_)) break;
             count_ += 1;
