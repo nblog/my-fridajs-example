@@ -47,6 +47,16 @@ class vftableHelper {
         return fnoriginal;
     }
 
+    #has_exec(address) {
+        let addr = ptr(address);
+        if ( addr.equals(NULL) ) return false;
+
+        /* https://docs.microsoft.com/windows/win32/api/winbase/nf-winbase-isbadcodeptr */
+        return 0 == new NativeFunction(
+            Module.getExportByName("kernel32.dll", "IsBadCodePtr"), 
+            "bool", [ "pointer" ])(addr);
+    }
+
     #vftable_count(limit_count=0) {
         let limit_count_ = limit_count;
 
@@ -57,7 +67,7 @@ class vftableHelper {
         do {
             let empty_ = this.vftable().add( count_ *  Process.pointerSize ).readPointer();
             /* eof */
-            if (empty_.isNull() || null == Process.findRangeByAddress(empty_)) break;
+            if (!this.#has_exec(empty_)) break;
             count_ += 1;
         } while (count_ < limit_count_);
 
