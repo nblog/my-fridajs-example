@@ -3,12 +3,15 @@
 
 
 
-
 let addr_transform = {
 
-    base: function(name="WeChatWin.dll") { 
-        return Process.getModuleByName(name).base; 
+    moduleName: "WeChatWin.dll",
+
+    module: function() {
+        return Process.getModuleByName(this.moduleName);
     },
+
+    base: function() { return this.module().base; },
 
     va: function(addr) { return this.base().add(addr); },
 
@@ -22,7 +25,7 @@ let addr_transform = {
 
     mem: function(addr) {
         let absValue = addr_transform.imm32(addr);
-        return 4 == ptrlength ? absValue : 
+        return 4 == Process.pointerSize ? absValue : 
             Number( addr_transform.rva(addr).add(absValue).add(4) );
     },
 
@@ -33,14 +36,20 @@ let addr_transform = {
         return Number(absValue) & 0xffffffff;
     },
 
+
     aobscan: function(pattern) {
         let matches = [];
-        Process.enumerateRanges("--x").forEach(function(range) {
+        this.module().enumerateRanges("--x").forEach(function(range) {
             Memory.scanSync(range.base, range.size, pattern).forEach(function(match) {
                 matches.push(match);
             });
         });
         return matches;
+    },
+
+    equal: function(addr, cmd="call") {
+        let info = Instruction.parse( ptr(addr) );
+        return [ info.mnemonic, info.opStr ].join(" ").includes( cmd.toLowerCase() );
     }
 }
 
