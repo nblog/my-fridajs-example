@@ -66,6 +66,7 @@ let symbols = {
 
         let dbkey_20 = loginMgr.add(dbkeyOffset).readPointer();
 
+        /* not logged in */
         if (dbkey_20.isNull()) { return null; }
 
         let dbkeyLength = loginMgr.add(dbkeyOffset).add(Process.pointerSize).readU32();
@@ -92,13 +93,21 @@ let symbols = {
     },
 
     /* 3.8.1.26 */
+    recvmsg: function() {
+        /*
+            "receive a unknown msg type: %d"
+            E8 ?? ?? ?? ?? 83 C0 01 83 D2 00 52 50 E8 -0xA call
+        */
+        let match = addr_transform.aobscan( "E8 ?? ?? ?? ?? 83 C0 01 83 D2 00 52 50 E8" );
+
+        let fnAddr = this.toVa( addr_transform.call( match[0]["address"].sub(0xa) ) ) ;
+
+        return fnAddr;
+    },
     sendmsg: function() {
         /* TEXT IMAGE NETEMOJI EXT */
         return this.toVa( 0xB6A930 );
     },
-    recvmsg: function() {
-        return this.toVa( addr_transform.call( addr_transform.base().add(0xB996DA) ) ) ;
-    }
 }
 
 
@@ -173,7 +182,6 @@ class recv_context {
 rpc.exports = {
 
     patch() {
-
 
         // Interceptor.attach(symbols.recvmsg(), {
         //     onEnter: function(args) {
