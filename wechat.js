@@ -6,8 +6,8 @@
 
 let addr_transform = {
 
-    base: function(name="") { 
-        return Process.getModuleByName(name ? name : "WeChatWin.dll").base; 
+    base: function(name="WeChatWin.dll") { 
+        return Process.getModuleByName(name).base; 
     },
 
     va: function(addr) { return this.base().add(addr); },
@@ -51,23 +51,53 @@ let symbols = {
         return addr_transform.va(rva);
     },
 
-    revokemsg: function() {
+    dbkey: function() {
+        /*
+            "On Set Info info md5 : %s, y : %s"
+            B9 02 00 00 00 68 ?? ?? ?? ?? 68 97 01 00 00 C6 00 03 E8 +0x1a call
+        */
+        let dbkeyOffset = 0x464;
+
+        let match = addr_transform.aobscan( "B9 02 00 00 00 68 ?? ?? ?? ?? 68 97 01 00 00 C6 00 03 E8" );
+
+        let fnAddr = this.toVa( addr_transform.call( match[0]["address"].add(0x1a) ) );
+
+        let loginMgr = new NativeFunction( fnAddr, 'pointer', [], 'mscdecl')();
+
+        let dbkey_20 = loginMgr.add(dbkeyOffset).readPointer();
+
+        if (dbkey_20.isNull()) { return null; }
+
+        let dbkeyLength = loginMgr.add(dbkeyOffset).add(Process.pointerSize).readU32();
+
+        return dbkey_20.readByteArray(dbkeyLength);
+    },
+
+    revokemsg: function(allow=true) {
         /* 
             "On RevokeMsg svrId"
-            8B CF E8 ?? ?? ?? ?? 83 C4 18 84 C0 0F 84 +2 call
+            8B CF E8 ?? ?? ?? ?? 83 C4 18 84 C0 0F 84 +0x2 call
         */
-        let match = addr_transform.aobscan( "8B CF E8 ?? ?? ?? ?? 83 C4 18 84 C0 0F 84" )
+        let match = addr_transform.aobscan( "8B CF E8 ?? ?? ?? ?? 83 C4 18 84 C0 0F 84" );
 
-        return ptr( addr_transform.call( match[0]["address"].add(2) ) ) ;
+        let fnAddr = this.toVa( addr_transform.call( match[0]["address"].add(2) ) ) ;
+
+        if (!allow) {
+            Interceptor.replace( fnAddr, new NativeCallback(() => {
+                return false;
+            }, 'bool', []));
+        } else Interceptor.revert( fnAddr );
+
+        return fnAddr;
     },
 
     /* 3.8.1.26 */
     sendmsg: function() {
         /* TEXT IMAGE NETEMOJI EXT */
-        return ptr( 0xB6A930 );
+        return this.toVa( 0xB6A930 );
     },
     recvmsg: function() {
-        return ptr( addr_transform.call( addr_transform.base().add(0xB996DA) ) ) ;
+        return this.toVa( addr_transform.call( addr_transform.base().add(0xB996DA) ) ) ;
     }
 }
 
@@ -144,34 +174,24 @@ rpc.exports = {
 
     patch() {
 
-        // let fnAddr = symbols.toVa( symbols.revokemsg() );
-        // Interceptor.replace(fnAddr,
-        //     new NativeCallback(() => {
-        //         return false;
-        //     }, 'bool', [])
-        // );
+
+        // Interceptor.attach(symbols.recvmsg(), {
+        //     onEnter: function(args) {
+        //         let message = new recv_context(args[0]);
+
+        //         console.log("msg_type: " + message.msg_type);
+        //         console.log("msg_self: " + message.msg_self);
+        //         console.log("msg_sender: " + message.msg_sender);
+        //         console.log("msg_content: " + message.msg_content);
+
+        //         if (message.msg_content.includes("蔡徐坤")) {
+        //             message.skip();
+        //         }
+        //     }
+        // });
 
 
-        let fnAddr = NULL;
-
-        fnAddr = symbols.toVa( symbols.recvmsg() );
-        Interceptor.attach(fnAddr, {
-            onEnter: function(args) {
-                let message = new recv_context(args[0]);
-
-                console.log("msg_type: " + message.msg_type);
-                console.log("msg_self: " + message.msg_self);
-                console.log("msg_sender: " + message.msg_sender);
-                console.log("msg_content: " + message.msg_content);
-
-                if (message.msg_content.includes("蔡徐坤")) {
-                    message.skip();
-                }
-            }
-        });
-
-        // fnAddr = symbols.toVa( symbols.sendmsg() );
-        // Interceptor.attach(fnAddr, {
+        // Interceptor.attach(symbols.sendmsg(), {
         //     onEnter: function(args) {
         //         let msg_sender = new wx_string(this.context.edx);
         //         let msg_content = new wx_string(args[0]);
