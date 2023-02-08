@@ -1,8 +1,6 @@
 ///<reference path='C:\\Users\\r0th3r\\OneDrive\\Codes\\index.d.ts'/>
 
 
-
-
 let addr_transform = {
 
     moduleName: "WeChatWin.dll",
@@ -60,29 +58,6 @@ let symbols = {
         return addr_transform.va(rva);
     },
 
-    dbkey: function() {
-        /*
-            "On Set Info info md5 : %s, y : %s"
-            B9 02 00 00 00 68 ?? ?? ?? ?? 68 97 01 00 00 C6 00 03 E8 +0x1a call
-        */
-        let dbkeyOffset = 0x464;
-
-        let match = addr_transform.aobscan( "B9 02 00 00 00 68 ?? ?? ?? ?? 68 97 01 00 00 C6 00 03 E8" );
-
-        let fnAddr = this.toVa( addr_transform.call( match[0]["address"].add(0x1a) ) );
-
-        let loginMgr = new NativeFunction( fnAddr, 'pointer', [], 'mscdecl')();
-
-        let dbkey_20 = loginMgr.add(dbkeyOffset).readPointer();
-
-        /* not logged in */
-        if (dbkey_20.isNull()) { return null; }
-
-        let dbkeyLength = loginMgr.add(dbkeyOffset).add(Process.pointerSize).readU32();
-
-        return dbkey_20.readByteArray(dbkeyLength);
-    },
-
     revokemsg: function(allow=true) {
         /* 
             "On RevokeMsg svrId"
@@ -113,26 +88,60 @@ let symbols = {
 
         return fnAddr;
     },
-    sendmsg: function() {
-        /* TEXT IMAGE NETEMOJI EXT */
-        return this.toVa( 0xB6A930 );
+    view_sendscreenshot(user, picture) {
+        let env = new NativeFunction( this.toVa( 0x65B2A0 ), 'pointer', [], "mscdecl")( );
+
+        let fnAddr = this.toVa( 0xB6A3F0 );
+        let wx = new NativeFunction( fnAddr, 
+            'void', ['pointer', 'pointer', 'pointer', 'pointer', 'pointer', 'uint', 'uint', 'uint', 'uint'], "thiscall");
+
+        let wx_user = wx_string.alloc(); wx_user.str = user;
+        let wx_file = wx_string.alloc(); wx_file.str = picture;
+
+        wx( env, Memory.alloc(0x2a8), wx_user.data, wx_file.data, NULL, 0, 0, 0, 0 );
     },
+    view_sendtext: function(user, text) {
+        let fnAddr = this.toVa( 0xB6A930 );
+        let wx = new NativeFunction( fnAddr, 
+            'void', ['pointer', 'pointer', 'pointer', 'pointer', 'uint', 'bool', 'uint'], "fastcall");
+
+        let wx_user = wx_string.alloc(); wx_user.str = user;
+        let wx_text = wx_string.alloc(); wx_text.str = text;
+
+        wx( Memory.alloc(0x2a8), wx_user.data, wx_text.data, NULL, 1, 0, 0 );
+    },
+    upload_sendemoji: function(user, picture) {
+
+    },
+    upload_sendxml: function(user, xml) {
+
+    }
 }
 
 
 
 class wx_string {
+    #data = NULL; #c_str = NULL;
+
     constructor(data) {
-        this._data = ptr(data)
+        this.#data = data;
     }
 
-    get length() {
-        return this._data.add(0x4).readU32();
+    get data() { return this.#data; }
+    set data(value) { this.#data = value; }
+    get buffer() { return this.empty() ? NULL : this.data.readPointer(); }
+    set buffer(value) { if (!this.data.isNull()) this.data.writePointer(value); }
+
+    get length() { return this.data.add(0x4).readU32(); }
+    set length(value) { 
+        this.data.add(0x4).writeU32(value);
+        this.data.add(0x8).writeU32(value);
     }
 
-    get str() {
-        if ( 1 > this.length ) return "";
-        return String( this._data.readPointer().readUtf16String() );
+    get str() { return this.length ? String( this.buffer.readUtf16String() ) : ""; }
+    set str(value) { 
+        this.#c_str = Memory.allocUtf16String(value);
+        this.buffer = this.#c_str; this.length = value.length;
     }
 
     empty() {
@@ -140,19 +149,19 @@ class wx_string {
     }
 
     clear() {
-        if ( this.empty() ) return;
-        this._data.add(0x4).writeU32(0);
-        this._data.add(0x8).writeU32(0);
-        this._data.readPointer().writeU16(0);
+        this.length = 0; this.buffer = NULL;
+    }
+
+    static alloc() {
+        return new wx_string( Memory.alloc(12) );
     }
 }
 
 class recv_context {
+    #pcontext = NULL;
+
     constructor(pcontext) {
-        this._msg_type = pcontext.add(0x38);
-        this._msg_self = pcontext.add(0x3C);
-        this._msg_sender = new wx_string(pcontext.add(0x48));
-        this._msg_content = new wx_string(pcontext.add(0x70));
+        this.#pcontext = pcontext;
     }
 
     /*
@@ -160,28 +169,22 @@ class recv_context {
         3: image
         34: voice
         43: video
+        47: custom emoji
         48: location
         49: share
         10000: system
     */
-    get msg_type() {
-        return Number(this._msg_type.readU32());
-    }
+    get type() { return this.#pcontext.add(0x38).readU32(); }
+    set type(value) { this.#pcontext.add(0x38).writeU32(value); }
 
-    get msg_self() {
-        return this._msg_self.readU8() == 1;
-    }
+    get self() { return 1 == this.#pcontext.add(0x3c).readU8(); }
 
-    get msg_sender() {
-        return this._msg_sender.str;
-    }
+    get target() { return new wx_string(this.#pcontext.add(0x48)); }
 
-    get msg_content() {
-        return this._msg_content.str;
-    }
+    get content() { return new wx_string(this.#pcontext.add(0x70)); }
 
     skip() {
-        this._msg_type.writeU32(0); this._msg_content.clear();
+        this.content.clear(); this.type = 0;
     }
 }
 
@@ -189,35 +192,51 @@ class recv_context {
 
 
 rpc.exports = {
+    dbkey: function() {
+        /*
+            "On Set Info info md5 : %s, y : %s"
+            83 C4 70 E8 ?? ?? ?? ?? FF 76 0C 8D 4D 08 FF 76 08 FF 76 04 FF 36 51 8B C8 +3 call
+        */
+        let dbkeyOffset = 0x464;
+
+        let match = addr_transform.aobscan( "83 C4 70 E8 ?? ?? ?? ?? FF 76 0C 8D 4D 08 FF 76 08 FF 76 04 FF 36 51 8B C8" );
+
+        let fnAddr = addr_transform.va( addr_transform.call( match[0]["address"].add(3) ) );
+
+        let loginMgr = new NativeFunction( fnAddr, 'pointer', [], 'mscdecl')();
+
+        let dbkey_20 = loginMgr.add(dbkeyOffset).readPointer();
+
+        /* not logged in */
+        if (dbkey_20.isNull()) { return null; }
+
+        let dbkeyLength = loginMgr.add(dbkeyOffset).add(Process.pointerSize).readU32();
+        /*
+            PRAGMA cipher_page_size = 4096;
+            PRAGMA kdf_iter = 64000;
+            PRAGMA cipher_hmac_algorithm = HMAC_SHA1;
+            PRAGMA cipher_kdf_algorithm = PBKDF2_HMAC_SHA1;
+        */
+        let userdir = new wx_string(loginMgr.add(0x10)).str;
+        userdir = userdir.substring(0, userdir.indexOf("\\config"));
+
+        let dbdir = [ userdir, "Msg"].join("\\");
+        console.log("dbdir: " + dbdir);
+
+        return dbkey_20.readByteArray(dbkeyLength);
+    },
 
     patch() {
 
-        // Interceptor.attach(symbols.recvmsg(), {
-        //     onEnter: function(args) {
-        //         let message = new recv_context(args[0]);
+        Interceptor.attach(symbols.recvmsg(), {
+            onEnter: function(args) {
+                let message = new recv_context(args[0]);
 
-        //         console.log("msg_type: " + message.msg_type);
-        //         console.log("msg_self: " + message.msg_self);
-        //         console.log("msg_sender: " + message.msg_sender);
-        //         console.log("msg_content: " + message.msg_content);
-
-        //         if (message.msg_content.includes("蔡徐坤")) {
-        //             message.skip();
-        //         }
-        //     }
-        // });
-
-
-        // Interceptor.attach(symbols.sendmsg(), {
-        //     onEnter: function(args) {
-        //         let msg_sender = new wx_string(this.context.edx);
-        //         let msg_content = new wx_string(args[0]);
-
-        //         if ( msg_content.str.includes("iKun") ) {
-        //             msg_content.clear();
-        //         }
-        //     }
-        // });
+                if (message.content.str.includes("蔡徐坤")) {
+                    message.skip();
+                }
+            }
+        });
 
     },
     unpatch() {
