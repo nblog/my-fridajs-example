@@ -110,10 +110,10 @@ let symbols = {
 
         wx( Memory.alloc(0x2a8), wx_user.data, wx_text.data, NULL, 1, 0, 0 );
     },
-    upload_sendemoji: function(user, picture) {
+    sendcustomemoji: function(user, image) {
 
     },
-    upload_sendxml: function(user, xml) {
+    sendfile: function(user, file) {
 
     }
 }
