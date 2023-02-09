@@ -53,6 +53,16 @@ let addr_transform = {
 
 
 
+/*
+
+
+
+
+
+
+
+*/
+
 let symbols = {
     toVa: function (rva=NULL) {
         return addr_transform.va(rva);
@@ -88,18 +98,6 @@ let symbols = {
 
         return fnAddr;
     },
-    view_sendscreenshot(user, picture) {
-        let env = new NativeFunction( this.toVa( 0x65B2A0 ), 'pointer', [], "mscdecl")( );
-
-        let fnAddr = this.toVa( 0xB6A3F0 );
-        let wx = new NativeFunction( fnAddr, 
-            'void', ['pointer', 'pointer', 'pointer', 'pointer', 'pointer', 'uint', 'uint', 'uint', 'uint'], "thiscall");
-
-        let wx_user = wx_string.alloc(); wx_user.str = user;
-        let wx_file = wx_string.alloc(); wx_file.str = picture;
-
-        wx( env, Memory.alloc(0x2a8), wx_user.data, wx_file.data, NULL, 0, 0, 0, 0 );
-    },
     view_sendtext: function(user, text) {
         let fnAddr = this.toVa( 0xB6A930 );
         let wx = new NativeFunction( fnAddr, 
@@ -107,15 +105,78 @@ let symbols = {
 
         let wx_user = wx_string.alloc(); wx_user.str = user;
         let wx_text = wx_string.alloc(); wx_text.str = text;
+        let wx_at = wx_string.alloc(); wx_at.str = "";
 
-        wx( Memory.alloc(0x2a8), wx_user.data, wx_text.data, NULL, 1, 0, 0 );
+        wx( Memory.alloc(0x2a8), wx_user.data, wx_text.data, wx_at.data, 1, 0, 0 );
     },
-    sendcustomemoji: function(user, image) {
+    view_sendscreenshot(user, picture) {
+        let env = new NativeFunction( this.toVa( 0x65B2A0 ), 'pointer', [], "mscdecl")( );
 
+        let fnAddr = this.toVa( 0xB6A3F0 );
+        let wx = new NativeFunction( fnAddr, 
+            'void', ['pointer', 
+            'pointer', 
+            'pointer', 'pointer', // user && file
+            'pointer', 'uint', 'uint', 'uint', 'uint'], "thiscall");
+
+        let wx_user = wx_string.alloc(); wx_user.str = user;
+        let wx_file = wx_string.alloc(); wx_file.str = picture;
+
+        wx( env, 
+            Memory.alloc(0x2a8), 
+            wx_user.data, wx_file.data, 
+            NULL, 0, 0, 0, 0 );
     },
-    sendfile: function(user, file) {
+    view_sendfile: function(user, file) {
+        // let env = new NativeFunction( this.toVa( 0x65DF50 ), 'pointer', [], "mscdecl")( );
 
-    }
+        // let fnAddr = this.toVa( 0xA10190 );
+        // let wx = new NativeFunction( fnAddr, 
+        //     'void', ['pointer', 
+        //     'pointer', 
+        //     'pointer', 'uint', 'uint', 'uint', 'uint',  // user
+        //     'pointer', 'uint', 'uint', 'uint', 'uint',  // file
+        //     'pointer', 'uint', 'uint', 'uint', 'uint',  // unknown
+        //     'uint',
+        //     'pointer', 'uint', 'uint', 'uint', 'uint'   // unknown
+        // ], "thiscall");
+
+        // let wx_user = wx_string.alloc(); wx_user.str = user;
+        // let wx_file = wx_string.alloc(); wx_file.str = file;
+
+        // wx( env,
+        //     Memory.alloc(0x2a8),
+        //     wx_user.data, wx_user.length, wx_user.length, 0, 0,
+        //     wx_file.data, wx_file.length, wx_file.length, 0, 0,
+        //     NULL, 0, 0, 0, 0,
+        //     0,
+        //     NULL, 0, 0, 0, 0 );
+    },
+    view_sendcustomemoji: function(user, image) {
+        // let env = new NativeFunction( this.toVa( 0x69A7D0 ), 'pointer', [], "mscdecl")( );
+
+        // let fnAddr = this.toVa( 0xAA9FD0 );
+        // let wx = new NativeFunction( fnAddr, 
+        //     'void', ['pointer', 
+        //     'pointer', 'uint', 'uint', 'uint', 'uint',  // image
+        //     'pointer', 'uint', 'uint', 'uint', 'uint',  // unknown
+        //     'pointer', 'uint', 'uint', 'uint', 'uint',  // user
+        //     'uint',
+        //     'pointer', 'uint', 'uint', 'uint', 'uint',  // unknown
+        //     'bool', 'pointer'
+        // ], "thiscall");
+
+        // let wx_user = wx_string.alloc(); wx_user.str = user;
+        // let wx_file = wx_string.alloc(); wx_file.str = image;
+
+        // wx( env,
+        //     wx_file.data, wx_file.length, wx_file.length, 0, 0,
+        //     NULL, 0, 0, 0, 0,
+        //     wx_user.data, wx_user.length, wx_user.length, 0, 0,
+        //     2,
+        //     NULL, 0, 0, 0, 0,
+        //     0, Memory.alloc( 8 ) );
+    },
 }
 
 
@@ -153,7 +214,8 @@ class wx_string {
     }
 
     static alloc() {
-        return new wx_string( Memory.alloc(12) );
+        /* [ 'pointer', 'uint', 'uint', 'uint', 'uint' ] */
+        return new wx_string( Memory.alloc(20) );
     }
 }
 
