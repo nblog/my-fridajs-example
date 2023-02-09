@@ -44,36 +44,58 @@ let SysFreeString = new NativeFunction(
     "void", [ "pointer" ]);
 
 class CTXStringW {
-    constructor(stringPtr) { 
-        let bstr = ptr(stringPtr); 
-        this._str = ""; if(bstr.isNull()) return;
-        this._str = bstr.readPointer().readUtf16String();
-        SysFreeString(bstr); /* ~CTXStringW */
+    #bstr = NULL;
+
+    constructor(stringPtr=NULL) { 
+        this.#bstr = stringPtr;
     }
 
-    get str() { return this._str; }
+    get str() { 
+        let buffer = this.#bstr.readPointer().readUtf16String();
+        // SysFreeString(this.#bstr); /* ~CTXStringW */
+        return String(buffer);
+    }
 }
 
 
-let GetSelfUin = new NativeFunction(
-    symbols.krnlutil().getExportByName("?GetSelfUin@Contact@Util@@YAKXZ"),
-    "uint", [], "mscdecl");
 
-let GetMsgTime = new NativeFunction(
-    symbols.krnlutil().getExportByName("?GetMsgTime@Msg@Util@@YA_JPAUITXMsgPack@@@Z"),
-    "int64", [ "pointer" ], "mscdecl");
 
-let GetGroupName = new NativeFunction(
+let GetSelfUin = function() {
+    return new NativeFunction(
+        symbols.krnlutil().getExportByName("?GetSelfUin@Contact@Util@@YAKXZ"),
+        "uint", [], "mscdecl")();
+}
+
+let GetGroupName = function(gid=Number(0)) {
+    let fn = new NativeFunction(
     symbols.krnlutil().getExportByName("?GetGroupName@Group@Util@@YA?AVCTXStringW@@KH@Z"),
     "pointer", [ "pointer", "uint", "int" ], "mscdecl");
+    let m = Memory.alloc( Process.pointerSize );
+    return new CTXStringW( fn( m, gid, 0 ) ).str;
+}
 
-let GetNickname = new NativeFunction(
+let GetNickname = function(uid=Number(0)) {
+    let fn = new NativeFunction(
     symbols.krnlutil().getExportByName("?GetNickname@Contact@Util@@YA?AVCTXStringW@@K@Z"),
     "pointer", [ "pointer", "uint" ], "mscdecl");
+    let m = Memory.alloc( Process.pointerSize );
+    return new CTXStringW( fn( m, uid ) ).str;
+}
 
-let GetMsgAbstract = new NativeFunction(
+
+let GetMsgTime = function(msgpack=NULL) {
+    return new NativeFunction(
+        symbols.krnlutil().getExportByName("?GetMsgTime@Msg@Util@@YA_JPAUITXMsgPack@@@Z"),
+        "int64", [ "pointer" ], "mscdecl")(msgpack);
+}
+
+let GetMsgAbstract = function(msgpack=NULL) {
+    let fn = new NativeFunction(
     symbols.krnlutil().getExportByName("?GetMsgAbstract@Msg@Util@@YA?AVCTXStringW@@PAUITXMsgPack@@@Z"),
     "pointer", [ "pointer", "pointer" ], "mscdecl");
+    let m = Memory.alloc( Process.pointerSize );
+    return new CTXStringW( fn( m, msgpack ) ).str;
+}
 
 
 
@@ -88,20 +110,14 @@ rpc.exports = {
                 // let uid2 = Number(args[2]);
                 let group_uid = Number(args[3]);
 
-                let msg_time = to_human_time(GetMsgTime(args[4]));
+                let msg_time = to_human_time( GetMsgTime(args[4]) );
 
-                let m = Memory.alloc( Process.pointerSize );
-                let msg_content = new CTXStringW(
-                    GetMsgAbstract( m, args[4] )).str;
+                let msg_content = GetMsgAbstract( args[4] );
 
-                m = Memory.alloc( Process.pointerSize );
-                let sender_name = new CTXStringW(
-                    GetNickname( m, sender_uid )).str;
+                let sender_name = GetNickname( sender_uid );
 
                 if (group_uid) {
-                    m = Memory.alloc( Process.pointerSize );
-                    let group_name = new CTXStringW( 
-                        GetGroupName( m, group_uid, 0 )).str;
+                    let group_name = GetGroupName( group_uid );
                     console.log(`${group_name}<${group_uid}> `);
                 }
 
