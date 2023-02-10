@@ -228,7 +228,7 @@ class recv_context {
 
 rpc.exports = {
 
-    dbkey: function() {
+    dbkey() {
         /*
             "On Set Info info md5 : %s, y : %s"
             83 C4 70 E8 ?? ?? ?? ?? FF 76 0C 8D 4D 08 FF 76 08 FF 76 04 FF 36 51 8B C8 +3 call
