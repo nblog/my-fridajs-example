@@ -1,10 +1,14 @@
 ///<reference path='C:\\Users\\r0th3r\\OneDrive\\Codes\\index.d.ts'/>
 
 
+import { addr_transform } from "./aobscan.js";
 
-function assert (condition, msg) {
+
+
+function assert (condition:any, msg:string) {
     if (!condition) throw new Error(`[ass] ${msg}`)
 }
+
 
 
 
