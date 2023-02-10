@@ -1,58 +1,5 @@
-///<reference path='C:\\Users\\r0th3r\\OneDrive\\Codes\\index.d.ts'/>
 
-
-
-
-let addr_transform = {
-
-    moduleName: "WeChatWin.dll",
-
-    module: function() {
-        return Process.getModuleByName(this.moduleName);
-    },
-
-    base: function() { return this.module().base; },
-
-    va: function(addr) { return this.base().add(addr); },
-
-    rva: function(addr) { return ptr(addr).sub(this.base()); },
-
-    imm8: function(addr) { return ptr(addr).readU8(); },
-
-    imm16: function(addr) { return ptr(addr).readU16(); },
-
-    imm32: function(addr) { return ptr(addr).readU32(); },
-
-    mem: function(addr) {
-        let absValue = addr_transform.imm32(addr);
-        return 4 == Process.pointerSize ? absValue : 
-            Number( addr_transform.rva(addr).add(absValue).add(4) );
-    },
-
-    call: function(addr) {
-        let absValue = addr_transform.rva(addr).add(
-            addr_transform.imm32( addr.add(1) )
-        ).add(5) ;
-        return Number(absValue) & 0xffffffff;
-    },
-
-
-    aobscan: function(pattern) {
-        let matches = [];
-        this.module().enumerateRanges("--x").forEach(function(range) {
-            Memory.scanSync(range.base, range.size, pattern).forEach(function(match) {
-                matches.push(match);
-            });
-        });
-        return matches;
-    },
-
-    equal: function(addr, cmd="call") {
-        let info = Instruction.parse( ptr(addr) );
-        return [ info.mnemonic, info.opStr ].join(" ").includes( cmd.toLowerCase() );
-    }
-}
-
+import { addr_transform } from "./aobscan.js";
 
 
 /*
@@ -60,10 +7,12 @@ let addr_transform = {
 
 
 */
+let addrHelper = new addr_transform("WechatWin.dll");
 
 let symbols = {
-    toVa: function (rva=NULL) {
-        return addr_transform.va(rva);
+
+    toVa: function(rva: number) {
+        return addrHelper.va(rva);
     },
 
     revokemsg: function(allow=true) {
@@ -71,13 +20,13 @@ let symbols = {
             "On RevokeMsg svrId"
             8B CF E8 ?? ?? ?? ?? 83 C4 18 84 C0 0F 84 +0x2 call
         */
-        let match = addr_transform.aobscan( "8B CF E8 ?? ?? ?? ?? 83 C4 18 84 C0 0F 84" );
+        let match = addrHelper.aobscan( "8B CF E8 ?? ?? ?? ?? 83 C4 18 84 C0 0F 84" );
 
-        let fnAddr = this.toVa( addr_transform.call( match[0]["address"].add(2) ) ) ;
+        let fnAddr = addrHelper.va( addrHelper.call( match[0]["address"].add(2) ) ) ;
 
         if (!allow) {
             Interceptor.replace( fnAddr, new NativeCallback(() => {
-                return false;
+                return Number(false);
             }, 'bool', []));
         } else Interceptor.revert( fnAddr );
 
@@ -88,26 +37,26 @@ let symbols = {
             "receive a unknown msg type: %d"
             E8 ?? ?? ?? ?? 83 C0 01 83 D2 00 52 50 E8 -0xA call
         */
-        let match = addr_transform.aobscan( "E8 ?? ?? ?? ?? 83 C0 01 83 D2 00 52 50 E8" );
+        let match = addrHelper.aobscan( "E8 ?? ?? ?? ?? 83 C0 01 83 D2 00 52 50 E8" );
 
-        let fnAddr = this.toVa( addr_transform.call( match[0]["address"].sub(0xa) ) ) ;
+        let fnAddr = addrHelper.va( addrHelper.call( match[0]["address"].sub(0xa) ) ) ;
 
         return fnAddr;
     },
 
     /* 3.8.1.26 */
-    wx_free: function(mem=NULL) {
+    wx_free: function(mem: NativePointer) {
         return new NativeFunction( 
-            this.toVa( 0x21DE211 ), 
+            addrHelper.va( 0x21DE211 ), 
             'void', ['pointer'], 'stdcall')( mem );
     },
-    wx_malloc: function(length=0) {
+    wx_malloc: function(length: number) {
         return new NativeFunction( 
-            this.toVa( 0x217AC91 ), 
+            addrHelper.va( 0x217AC91 ), 
             'pointer', ['size_t'], 'stdcall')( length );
     },
-    view_sendtext: function(user, text) {
-        let fnAddr = this.toVa( 0xB6A930 );
+    view_sendtext: function(user: string, text: string) {
+        let fnAddr = addrHelper.va( 0xB6A930 );
         let wx = new NativeFunction( fnAddr, 
             'void', ['pointer', 
             'pointer', 'pointer',   // user && text
@@ -121,10 +70,11 @@ let symbols = {
 
         wx( Memory.alloc(0x2a8), wx_user.data, wx_text.data, wx_at.data, 1, 0, 0 );
     },
-    view_sendscreenshot(user, picture) {
-        let env = new NativeFunction( this.toVa( 0x65B2A0 ), 'pointer', [], 'mscdecl')( );
+    view_sendscreenshot(user: string, picture: string) {
+        let env = new NativeFunction( 
+            addrHelper.va( 0x65B2A0 ), 'pointer', [], 'mscdecl')( );
 
-        let fnAddr = this.toVa( 0xB6A3F0 );
+        let fnAddr = addrHelper.va( 0xB6A3F0 );
         let wx = new NativeFunction( fnAddr, 
             'void', ['pointer', 
             'pointer', 
@@ -139,11 +89,12 @@ let symbols = {
             wx_user.data, wx_file.data, 
             NULL, 0, 0, 0, 0 );
     },
-    view_sendcustomemoji: function(user, image) {
+    view_sendcustomemoji: function(user: string, image: string) {
         /* CustomSmileyMgr */
-        let env = new NativeFunction( this.toVa( 0x69A7D0 ), 'pointer', [], 'mscdecl')( );
+        let env = new NativeFunction( 
+            addrHelper.va( 0x69A7D0 ), 'pointer', [], 'mscdecl')( );
 
-        let fnAddr = this.toVa( 0xAA9FD0 );
+        let fnAddr = addrHelper.va( 0xAA9FD0 );
         let wx = new NativeFunction( fnAddr, 
             'void', ['pointer', 
             'pointer', 'uint', 'uint', 'uint', 'uint',  // image
@@ -165,11 +116,12 @@ let symbols = {
             NULL, 0, 0, 0, 0,
             0, Memory.alloc( 8 ) );
     },
-    view_sendfile: function(user, file) {
+    view_sendfile: function(user: string, file: string) {
         /* AppMsgMgr */
-        let env = new NativeFunction( this.toVa( 0x65DF50 ), 'pointer', [], 'mscdecl')( );
+        let env = new NativeFunction( 
+            addrHelper.va( 0x65DF50 ), 'pointer', [], 'mscdecl')( );
 
-        let fnAddr = this.toVa( 0xA10190 );
+        let fnAddr = addrHelper.va( 0xA10190 );
         let wx = new NativeFunction( fnAddr, 
             'void', ['pointer', 
             'pointer', 
@@ -198,7 +150,7 @@ let symbols = {
 class wx_string {
     #data = NULL; #c_str = NULL;
 
-    constructor(data) {
+    constructor(data: NativePointer) {
         this.#data = data;
     }
 
@@ -237,7 +189,7 @@ class wx_string {
 class recv_context {
     #pcontext = NULL;
 
-    constructor(pcontext) {
+    constructor(pcontext: NativePointer) {
         this.#pcontext = pcontext;
     }
 
@@ -266,7 +218,7 @@ class recv_context {
         this.content.clear(); this.type = 0;
     }
 
-    replace(content="", type=0) {
+    replace(content: string, type: number=0) {
         this.content.str = content; if (type) this.type = type;
     }
 }
@@ -283,11 +235,11 @@ rpc.exports = {
         */
         let dbkeyOffset = 0x464;
 
-        let match = addr_transform.aobscan( "83 C4 70 E8 ?? ?? ?? ?? FF 76 0C 8D 4D 08 FF 76 08 FF 76 04 FF 36 51 8B C8" );
+        let match = addrHelper.aobscan( "83 C4 70 E8 ?? ?? ?? ?? FF 76 0C 8D 4D 08 FF 76 08 FF 76 04 FF 36 51 8B C8" );
 
-        let fnAddr = addr_transform.va( addr_transform.call( match[0]["address"].add(3) ) );
+        let fnAddr = addrHelper.va( addrHelper.call( match[0]["address"].add(3) ) );
 
-        let loginMgr = new NativeFunction( fnAddr, 'pointer', [], 'mscdecl')();
+        let loginMgr = new NativeFunction(fnAddr, 'pointer', [], 'mscdecl')();
 
         let dbkey_20 = loginMgr.add(dbkeyOffset).readPointer();
 
@@ -315,6 +267,8 @@ rpc.exports = {
         Interceptor.attach(symbols.recvmsg(), {
             onEnter: function(args) {
                 let message = new recv_context(args[0]);
+
+                console.log("recvmsg: " + "(" + message.type + ") " + message.content.str);
 
                 if (message.content.str.includes("蔡徐坤")) {
                     message.replace("朋友, 这可不兴讲!", 10000);
