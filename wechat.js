@@ -1,6 +1,8 @@
 ///<reference path='C:\\Users\\r0th3r\\OneDrive\\Codes\\index.d.ts'/>
 
 
+
+
 let addr_transform = {
 
     moduleName: "WeChatWin.dll",
@@ -108,7 +110,10 @@ let symbols = {
         let fnAddr = this.toVa( 0xB6A930 );
         let wx = new NativeFunction( fnAddr, 
             'void', ['pointer', 
-            'pointer', 'pointer', 'pointer', 'uint', 'bool', 'uint'], 'fastcall');
+            'pointer', 'pointer',   // user && text
+            'pointer',              // notify@all
+            'uint',                 // type
+            'bool', 'uint'], 'fastcall');
 
         let wx_at = wx_string.alloc(); wx_at.str = "";  /* notify@all */
         let wx_user = wx_string.alloc(); wx_user.str = user;
@@ -134,32 +139,8 @@ let symbols = {
             wx_user.data, wx_file.data, 
             NULL, 0, 0, 0, 0 );
     },
-    view_sendfile: function(user, file) {
-        let env = new NativeFunction( this.toVa( 0x65DF50 ), 'pointer', [], 'mscdecl')( );
-
-        let fnAddr = this.toVa( 0xA10190 );
-        let wx = new NativeFunction( fnAddr, 
-            'void', ['pointer', 
-            'pointer', 
-            'pointer', 'uint', 'uint', 'uint', 'uint',  // user
-            'pointer', 'uint', 'uint', 'uint', 'uint',  // file
-            'pointer', 'uint', 'uint', 'uint', 'uint',  // unknown
-            'uint',
-            'pointer', 'uint', 'uint', 'uint', 'uint'   // unknown
-        ], 'thiscall');
-
-        let wx_user = wx_string.alloc(); wx_user.str = user;
-        let wx_file = wx_string.alloc(); wx_file.str = file;
-
-        wx( env,
-            Memory.alloc(0x2a8),
-            wx_user.buffer, wx_user.length, wx_user.length, 0, 0,
-            wx_file.buffer, wx_file.length, wx_file.length, 0, 0,
-            NULL, 0, 0, 0, 0,
-            0,
-            NULL, 0, 0, 0, 0 );
-    },
     view_sendcustomemoji: function(user, image) {
+        /* CustomSmileyMgr */
         let env = new NativeFunction( this.toVa( 0x69A7D0 ), 'pointer', [], 'mscdecl')( );
 
         let fnAddr = this.toVa( 0xAA9FD0 );
@@ -184,6 +165,32 @@ let symbols = {
             NULL, 0, 0, 0, 0,
             0, Memory.alloc( 8 ) );
     },
+    view_sendfile: function(user, file) {
+        /* AppMsgMgr */
+        let env = new NativeFunction( this.toVa( 0x65DF50 ), 'pointer', [], 'mscdecl')( );
+
+        let fnAddr = this.toVa( 0xA10190 );
+        let wx = new NativeFunction( fnAddr, 
+            'void', ['pointer', 
+            'pointer', 
+            'pointer', 'uint', 'uint', 'uint', 'uint',  // user
+            'pointer', 'uint', 'uint', 'uint', 'uint',  // file
+            'pointer', 'uint', 'uint', 'uint', 'uint',  // unknown
+            'uint',
+            'pointer', 'uint', 'uint', 'uint', 'uint'   // unknown
+        ], 'thiscall');
+
+        let wx_user = wx_string.alloc(); wx_user.str = user;
+        let wx_file = wx_string.alloc(); wx_file.str = file;
+
+        wx( env,
+            Memory.alloc(0x2a8),
+            wx_user.buffer, wx_user.length, wx_user.length, 0, 0,
+            wx_file.buffer, wx_file.length, wx_file.length, 0, 0,
+            NULL, 0, 0, 0, 0,
+            0,
+            NULL, 0, 0, 0, 0 );
+    },
 }
 
 
@@ -200,10 +207,10 @@ class wx_string {
     get buffer() { return this.empty() ? NULL : this.data.readPointer(); }
     set buffer(value) { if (!this.data.isNull()) this.data.writePointer(value); }
 
-    get length() { return this.data.add(0x4).readU32(); }
+    get length() { return this.data.add(Process.pointerSize).readU32(); }
     set length(value) { 
-        this.data.add(0x4).writeU32(value);
-        this.data.add(0x8).writeU32(value);
+        this.data.add(Process.pointerSize).writeU32(value);
+        this.data.add(Process.pointerSize * 2).writeU32(value);
     }
 
     get str() { return this.length ? String( this.buffer.readUtf16String() ) : ""; }
@@ -268,6 +275,7 @@ class recv_context {
 
 
 rpc.exports = {
+
     dbkey: function() {
         /*
             "On Set Info info md5 : %s, y : %s"
@@ -316,7 +324,7 @@ rpc.exports = {
 
     },
     unpatch() {
+        Interceptor.revert(symbols.recvmsg());
+    },
 
-    }
-
-  };
+};
