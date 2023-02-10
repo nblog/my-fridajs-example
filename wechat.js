@@ -57,10 +57,6 @@ let addr_transform = {
 
 
 
-
-
-
-
 */
 
 let symbols = {
@@ -85,8 +81,6 @@ let symbols = {
 
         return fnAddr;
     },
-
-    /* 3.8.1.26 */
     recvmsg: function() {
         /*
             "receive a unknown msg type: %d"
@@ -98,26 +92,39 @@ let symbols = {
 
         return fnAddr;
     },
+
+    /* 3.8.1.26 */
+    wx_free: function(mem=NULL) {
+        return new NativeFunction( 
+            this.toVa( 0x21DE211 ), 
+            'void', ['pointer'], 'stdcall')( mem );
+    },
+    wx_malloc: function(length=0) {
+        return new NativeFunction( 
+            this.toVa( 0x217AC91 ), 
+            'pointer', ['size_t'], 'stdcall')( length );
+    },
     view_sendtext: function(user, text) {
         let fnAddr = this.toVa( 0xB6A930 );
         let wx = new NativeFunction( fnAddr, 
-            'void', ['pointer', 'pointer', 'pointer', 'pointer', 'uint', 'bool', 'uint'], "fastcall");
+            'void', ['pointer', 
+            'pointer', 'pointer', 'pointer', 'uint', 'bool', 'uint'], 'fastcall');
 
+        let wx_at = wx_string.alloc(); wx_at.str = "";  /* notify@all */
         let wx_user = wx_string.alloc(); wx_user.str = user;
         let wx_text = wx_string.alloc(); wx_text.str = text;
-        let wx_at = wx_string.alloc(); wx_at.str = "";
 
         wx( Memory.alloc(0x2a8), wx_user.data, wx_text.data, wx_at.data, 1, 0, 0 );
     },
     view_sendscreenshot(user, picture) {
-        let env = new NativeFunction( this.toVa( 0x65B2A0 ), 'pointer', [], "mscdecl")( );
+        let env = new NativeFunction( this.toVa( 0x65B2A0 ), 'pointer', [], 'mscdecl')( );
 
         let fnAddr = this.toVa( 0xB6A3F0 );
         let wx = new NativeFunction( fnAddr, 
             'void', ['pointer', 
             'pointer', 
             'pointer', 'pointer', // user && file
-            'pointer', 'uint', 'uint', 'uint', 'uint'], "thiscall");
+            'pointer', 'uint', 'uint', 'uint', 'uint'], 'thiscall');
 
         let wx_user = wx_string.alloc(); wx_user.str = user;
         let wx_file = wx_string.alloc(); wx_file.str = picture;
@@ -128,54 +135,54 @@ let symbols = {
             NULL, 0, 0, 0, 0 );
     },
     view_sendfile: function(user, file) {
-        // let env = new NativeFunction( this.toVa( 0x65DF50 ), 'pointer', [], "mscdecl")( );
+        let env = new NativeFunction( this.toVa( 0x65DF50 ), 'pointer', [], 'mscdecl')( );
 
-        // let fnAddr = this.toVa( 0xA10190 );
-        // let wx = new NativeFunction( fnAddr, 
-        //     'void', ['pointer', 
-        //     'pointer', 
-        //     'pointer', 'uint', 'uint', 'uint', 'uint',  // user
-        //     'pointer', 'uint', 'uint', 'uint', 'uint',  // file
-        //     'pointer', 'uint', 'uint', 'uint', 'uint',  // unknown
-        //     'uint',
-        //     'pointer', 'uint', 'uint', 'uint', 'uint'   // unknown
-        // ], "thiscall");
+        let fnAddr = this.toVa( 0xA10190 );
+        let wx = new NativeFunction( fnAddr, 
+            'void', ['pointer', 
+            'pointer', 
+            'pointer', 'uint', 'uint', 'uint', 'uint',  // user
+            'pointer', 'uint', 'uint', 'uint', 'uint',  // file
+            'pointer', 'uint', 'uint', 'uint', 'uint',  // unknown
+            'uint',
+            'pointer', 'uint', 'uint', 'uint', 'uint'   // unknown
+        ], 'thiscall');
 
-        // let wx_user = wx_string.alloc(); wx_user.str = user;
-        // let wx_file = wx_string.alloc(); wx_file.str = file;
+        let wx_user = wx_string.alloc(); wx_user.str = user;
+        let wx_file = wx_string.alloc(); wx_file.str = file;
 
-        // wx( env,
-        //     Memory.alloc(0x2a8),
-        //     wx_user.data, wx_user.length, wx_user.length, 0, 0,
-        //     wx_file.data, wx_file.length, wx_file.length, 0, 0,
-        //     NULL, 0, 0, 0, 0,
-        //     0,
-        //     NULL, 0, 0, 0, 0 );
+        wx( env,
+            Memory.alloc(0x2a8),
+            wx_user.buffer, wx_user.length, wx_user.length, 0, 0,
+            wx_file.buffer, wx_file.length, wx_file.length, 0, 0,
+            NULL, 0, 0, 0, 0,
+            0,
+            NULL, 0, 0, 0, 0 );
     },
     view_sendcustomemoji: function(user, image) {
-        // let env = new NativeFunction( this.toVa( 0x69A7D0 ), 'pointer', [], "mscdecl")( );
+        let env = new NativeFunction( this.toVa( 0x69A7D0 ), 'pointer', [], 'mscdecl')( );
 
-        // let fnAddr = this.toVa( 0xAA9FD0 );
-        // let wx = new NativeFunction( fnAddr, 
-        //     'void', ['pointer', 
-        //     'pointer', 'uint', 'uint', 'uint', 'uint',  // image
-        //     'pointer', 'uint', 'uint', 'uint', 'uint',  // unknown
-        //     'pointer', 'uint', 'uint', 'uint', 'uint',  // user
-        //     'uint',
-        //     'pointer', 'uint', 'uint', 'uint', 'uint',  // unknown
-        //     'bool', 'pointer'
-        // ], "thiscall");
+        let fnAddr = this.toVa( 0xAA9FD0 );
+        let wx = new NativeFunction( fnAddr, 
+            'void', ['pointer', 
+            'pointer', 'uint', 'uint', 'uint', 'uint',  // image
+            'pointer', 'uint', 'uint', 'uint', 'uint',  // unknown
+            'pointer', 'uint', 'uint', 'uint', 'uint',  // user
+            'uint',
+            'pointer', 'uint', 'uint', 'uint', 'uint',  // unknown
+            'bool', 'pointer'
+        ], 'thiscall');
 
-        // let wx_user = wx_string.alloc(); wx_user.str = user;
-        // let wx_file = wx_string.alloc(); wx_file.str = image;
+        let wx_user = wx_string.alloc(); wx_user.str = user;
+        let wx_file = wx_string.alloc(); wx_file.str = image;
 
-        // wx( env,
-        //     wx_file.data, wx_file.length, wx_file.length, 0, 0,
-        //     NULL, 0, 0, 0, 0,
-        //     wx_user.data, wx_user.length, wx_user.length, 0, 0,
-        //     2,
-        //     NULL, 0, 0, 0, 0,
-        //     0, Memory.alloc( 8 ) );
+        wx( env,
+            wx_file.buffer, wx_file.length, wx_file.length, 0, 0,
+            NULL, 0, 0, 0, 0,
+            wx_user.buffer, wx_user.length, wx_user.length, 0, 0,
+            2,
+            NULL, 0, 0, 0, 0,
+            0, Memory.alloc( 8 ) );
     },
 }
 
@@ -201,7 +208,8 @@ class wx_string {
 
     get str() { return this.length ? String( this.buffer.readUtf16String() ) : ""; }
     set str(value) { 
-        this.#c_str = Memory.allocUtf16String(value);
+        // this.#c_str = Memory.allocUtf16String(value);
+        this.#c_str = symbols.wx_malloc((value.length + 1) * 2).writeUtf16String(value);
         this.buffer = this.#c_str; this.length = value.length;
     }
 
@@ -230,10 +238,12 @@ class recv_context {
         1: text
         3: image
         34: voice
+        37: new friend
+        42: card
         43: video
         47: custom emoji
         48: location
-        49: share
+        49: file / share / link / money
         10000: system
     */
     get type() { return this.#pcontext.add(0x38).readU32(); }
@@ -282,7 +292,7 @@ rpc.exports = {
         let userdir = new wx_string(loginMgr.add(0x10)).str;
         userdir = userdir.substring(0, userdir.indexOf("\\config"));
 
-        let dbdir = [ userdir, "Msg"].join("\\");
+        let dbdir = [ userdir, "Msg" ].join("\\");
         console.log("dbdir: " + dbdir);
 
         return dbkey_20.readByteArray(dbkeyLength);
