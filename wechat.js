@@ -258,6 +258,10 @@ class recv_context {
     skip() {
         this.content.clear(); this.type = 0;
     }
+
+    replace(content="", type=0) {
+        this.content.str = content; if (type) this.type = type;
+    }
 }
 
 
@@ -305,7 +309,7 @@ rpc.exports = {
                 let message = new recv_context(args[0]);
 
                 if (message.content.str.includes("蔡徐坤")) {
-                    message.skip();
+                    message.replace("朋友, 这可不兴讲!", 10000);
                 }
             }
         });
