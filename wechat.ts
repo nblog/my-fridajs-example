@@ -230,11 +230,18 @@ rpc.exports = {
 
     dbkey() {
         /*
+            "On Set Md5 : %s"
+            83 FF 20 75 15 85 F6 74 11 57 56 8D 88 +B +2 imm32
+        */
+        let dbkeyOffset = 0;
+        {
+            let match = addrHelper.aobscan( "83 FF 20 75 15 85 F6 74 11 57 56 8D 88" );
+            dbkeyOffset = addrHelper.imm32( match[0]["address"].add(0xb).add(2) );
+        }
+        /*
             "On Set Info info md5 : %s, y : %s"
             83 C4 70 E8 ?? ?? ?? ?? FF 76 0C 8D 4D 08 FF 76 08 FF 76 04 FF 36 51 8B C8 +3 call
         */
-        let dbkeyOffset = 0x464;
-
         let match = addrHelper.aobscan( "83 C4 70 E8 ?? ?? ?? ?? FF 76 0C 8D 4D 08 FF 76 08 FF 76 04 FF 36 51 8B C8" );
 
         let fnAddr = addrHelper.va( addrHelper.call( match[0]["address"].add(3) ) );
@@ -248,6 +255,7 @@ rpc.exports = {
 
         let dbkeyLength = loginMgr.add(dbkeyOffset).add(Process.pointerSize).readU32();
         /*
+            PRAGMA hexkey = \'{}\';
             PRAGMA cipher_page_size = 4096;
             PRAGMA kdf_iter = 64000;
             PRAGMA cipher_hmac_algorithm = HMAC_SHA1;
