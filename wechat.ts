@@ -248,12 +248,13 @@ rpc.exports = {
 
         let loginMgr = new NativeFunction(fnAddr, 'pointer', [], 'mscdecl')();
 
-        let dbkey_20 = loginMgr.add(dbkeyOffset).readPointer();
+        let dbkeyLength = loginMgr.add(dbkeyOffset).add(Process.pointerSize).readU32();
+
+        let dbkey_20 = loginMgr.add(dbkeyOffset).readPointer().readByteArray(dbkeyLength);
 
         /* not logged in */
-        if (dbkey_20.isNull()) { return null; }
+        if (0 == dbkeyLength || null == dbkey_20) return [];
 
-        let dbkeyLength = loginMgr.add(dbkeyOffset).add(Process.pointerSize).readU32();
         /*
             PRAGMA hexkey = \'{}\';
             PRAGMA cipher_page_size = 4096;
@@ -264,10 +265,7 @@ rpc.exports = {
         let userdir = new wx_string(loginMgr.add(0x10)).str;
         userdir = userdir.substring(0, userdir.indexOf("\\config"));
 
-        let dbdir = [ userdir, "Msg" ].join("\\");
-        console.log("dbdir: " + dbdir);
-
-        return dbkey_20.readByteArray(dbkeyLength);
+        return [ userdir, new Uint8Array( dbkey_20 ) ];
     },
 
     patch() {
@@ -288,5 +286,4 @@ rpc.exports = {
     unpatch() {
         Interceptor.revert(symbols.recvmsg());
     },
-
 };
