@@ -2,13 +2,12 @@
 
 
 
-
 export class addr_transform {
 
     #moduleName:string = Process.enumerateModules()[0].name;
 
-    constructor(moduleName:string) {
-        this.#moduleName = moduleName;
+    constructor(moduleName:string="") {
+        if (moduleName.length) this.#moduleName = moduleName;
     };
 
     module() {
@@ -23,9 +22,10 @@ export class addr_transform {
 
     imm8(addr: NativePointer) { return addr.readU8(); };
 
-    imm16(addr: NativePointer) { return addr.readU16(); };
-
     imm32(addr: NativePointer) { return addr.readU32(); };
+
+    imm64(addr: NativePointer) { return addr.readU64(); }
+
 
     mem(addr: NativePointer) {
         let absValue = this.imm32(addr);
