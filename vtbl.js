@@ -9,14 +9,15 @@
 
 
 
+
 /* Virtual Table Swap (VTableSwap) */
 class vftableHelper {
 
     #vftable_ptr_ = NULL;
     #vftable_shadow_ = [ NULL, NULL ];
 
-    constructor(instance, limit_count=0) {
-        this.#vftable_ptr_ = ptr(instance);
+    constructor(interfaces, limit_count=-1) {
+        this.#vftable_ptr_ = interfaces;
 
         /* vftable dump */
         this.#vftable_shadow_[0] = this.vftable();
@@ -47,30 +48,25 @@ class vftableHelper {
         return fnoriginal;
     }
 
-    #has_exec(address) {
-        let addr = ptr(address);
+    #vftable_count(limit_count) {
+        let limit_count_ = 0 > limit_count ? 
+        Math.floor(Process.pageSize / Process.pointerSize) : limit_count;
+
+        let count_ = 0;
+        for ( ; count_ < limit_count_; count_++) {
+            let empty_ = this.vftable().add( count_ *  Process.pointerSize ).readPointer();
+            /* eof */
+            if (!this.#has_exec(empty_)) break;
+        }
+        return count_;
+    }
+
+    #has_exec(addr) {
         if ( addr.equals(NULL) ) return false;
 
         /* https://docs.microsoft.com/windows/win32/api/winbase/nf-winbase-isbadcodeptr */
         return 0 == new NativeFunction(
             Module.getExportByName("kernel32.dll", "IsBadCodePtr"), 
             "bool", [ "pointer" ])(addr);
-    }
-
-    #vftable_count(limit_count=0) {
-        let limit_count_ = limit_count;
-
-        if (0 == limit_count)
-            limit_count_ = int64(Process.pageSize / Process.pointerSize);
-
-        let count_ = 0; 
-        do {
-            let empty_ = this.vftable().add( count_ *  Process.pointerSize ).readPointer();
-            /* eof */
-            if (!this.#has_exec(empty_)) break;
-            count_ += 1;
-        } while (count_ < limit_count_);
-
-        return count_;
     }
 }
