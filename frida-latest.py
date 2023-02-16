@@ -2,7 +2,7 @@
 # -*- coding=utf-8 -*-
 
 '''
-SET DOWNURL=...
+SET DOWNURL=https://github.com/nblog/my-fridajs-example/blob/dev/frida-latest.py?raw=true
 python -c "import urllib.request;HTTPGET=urllib.request.urlopen;exec(HTTPGET('%DOWNURL%').read().decode('utf-8'))"
 '''
 
