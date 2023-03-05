@@ -44,37 +44,44 @@ let symbols = {
         return fnAddr;
     },
 
-    /* 3.8.1.26 */
     wx_free: function(mem: NativePointer) {
-        return new NativeFunction( 
-            addrHelper.va( 0x21DE211 ), 
+        return new NativeFunction(
+            Module.getExportByName('mmtcmalloc.dll', 'mm_free'),
             'void', ['pointer'], 'stdcall')( mem );
     },
     wx_malloc: function(length: number) {
         return new NativeFunction( 
-            addrHelper.va( 0x217AC91 ), 
+            Module.getExportByName('mmtcmalloc.dll', 'mm_malloc'),
             'pointer', ['size_t'], 'stdcall')( length );
     },
+
+    /* 3.9.0.28 */
+    chatview_length: 0x2a8,
+
     view_sendtext: function(user: string, text: string) {
-        let fnAddr = addrHelper.va( 0xB6A930 );
+        /* FF 76 04 8D 46 38 6A 00 6A 01 50  +18 call */
+        let fnAddr = addrHelper.va( 0xC71A60 );
         let wx = new NativeFunction( fnAddr, 
             'void', ['pointer', 
             'pointer', 'pointer',   // user && text
             'pointer',              // notify@all
             'uint',                 // type
-            'bool', 'uint'], 'fastcall');
+            'bool', 'uint', 'pointer'], 'fastcall');
 
         let wx_at = wx_string.alloc(); wx_at.str = "";  /* notify@all */
         let wx_user = wx_string.alloc(); wx_user.str = user;
         let wx_text = wx_string.alloc(); wx_text.str = text;
 
-        wx( Memory.alloc(0x2a8), wx_user.data, wx_text.data, wx_at.data, 1, 0, 0 );
+        wx( Memory.alloc(this.chatview_length), wx_user.data, wx_text.data, wx_at.data, 1, 0, 0, NULL );
     },
     view_sendscreenshot(user: string, picture: string) {
+        /* 
+            env: 83 C4 04 E9 ?? ?? ?? ?? E8 ?? ?? ?? ?? 83 EC 14 89 45  +8 call  +30 call
+        */
         let env = new NativeFunction( 
-            addrHelper.va( 0x65B2A0 ), 'pointer', [], 'mscdecl')( );
+            addrHelper.va( 0x706D30 ), 'pointer', [], 'mscdecl')( );
 
-        let fnAddr = addrHelper.va( 0xB6A3F0 );
+        let fnAddr = addrHelper.va( 0xC71500 );
         let wx = new NativeFunction( fnAddr, 
             'void', ['pointer', 
             'pointer', 
@@ -85,16 +92,16 @@ let symbols = {
         let wx_file = wx_string.alloc(); wx_file.str = picture;
 
         wx( env, 
-            Memory.alloc(0x2a8), 
+            Memory.alloc(this.chatview_length), 
             wx_user.data, wx_file.data, 
             NULL, 0, 0, 0, 0 );
     },
     view_sendcustomemoji: function(user: string, image: string) {
         /* CustomSmileyMgr */
         let env = new NativeFunction( 
-            addrHelper.va( 0x69A7D0 ), 'pointer', [], 'mscdecl')( );
+            addrHelper.va( 0x753440 ), 'pointer', [], 'mscdecl')( );
 
-        let fnAddr = addrHelper.va( 0xAA9FD0 );
+        let fnAddr = addrHelper.va( 0xBA6600 );
         let wx = new NativeFunction( fnAddr, 
             'void', ['pointer', 
             'pointer', 'uint', 'uint', 'uint', 'uint',  // image
@@ -119,9 +126,9 @@ let symbols = {
     view_sendfile: function(user: string, file: string) {
         /* AppMsgMgr */
         let env = new NativeFunction( 
-            addrHelper.va( 0x65DF50 ), 'pointer', [], 'mscdecl')( );
+            addrHelper.va( 0x709BB0 ), 'pointer', [], 'mscdecl')( );
 
-        let fnAddr = addrHelper.va( 0xA10190 );
+        let fnAddr = addrHelper.va( 0xB06240 );
         let wx = new NativeFunction( fnAddr, 
             'void', ['pointer', 
             'pointer', 
@@ -136,7 +143,7 @@ let symbols = {
         let wx_file = wx_string.alloc(); wx_file.str = file;
 
         wx( env,
-            Memory.alloc(0x2a8),
+            Memory.alloc(this.chatview_length),
             wx_user.buffer, wx_user.length, wx_user.length, 0, 0,
             wx_file.buffer, wx_file.length, wx_file.length, 0, 0,
             NULL, 0, 0, 0, 0,
