@@ -1,13 +1,11 @@
 
 
-
-
 export class addr_transform {
 
-    #moduleName:string = Process.enumerateModules()[0].name;
+    #moduleName = ""
 
-    constructor(moduleName:string="") {
-        if (moduleName.length) this.#moduleName = moduleName;
+    constructor(moduleName: string) {
+        this.#moduleName = moduleName ?? Process.enumerateModules()[0].name;
     };
 
     module() {
@@ -27,12 +25,6 @@ export class addr_transform {
     imm64(addr: NativePointer) { return addr.readU64(); }
 
 
-    mem(addr: NativePointer) {
-        let absValue = this.imm32(addr);
-        return 4 == Process.pointerSize ? absValue : 
-        ( this.rva(addr) + absValue + 4 );
-    };
-
     call(addr: NativePointer) {
         let absValue = this.rva(addr) + this.imm32( addr.add(1) ) + 5;
         return ( absValue & 0xffffffff );
@@ -40,16 +32,14 @@ export class addr_transform {
 
     equal(addr: NativePointer, cmd="call") {
         let info = Instruction.parse( addr );
-        return [ info.mnemonic, info.opStr ].join(" ").startsWith( cmd.toLowerCase() );
+        return [ info.mnemonic, info.opStr ].join(" ").includes( cmd.toLowerCase() );
     };
 
     aobscan(pattern: string) {
-        let matches: MemoryScanMatch[] = [];
-        this.module().enumerateRanges("--x").forEach(function(range) {
-            Memory.scanSync(range.base, range.size, pattern).forEach(function(match) {
-                matches.push(match);
-            });
-        });
-        return matches;
+        for (const m of this.module().enumerateRanges("--x")) {
+            let match = Memory.scanSync(m.base, m.size, pattern);
+            if (0 < match.length) return match;
+        }
+        return [];
     };
 }
