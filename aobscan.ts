@@ -2,10 +2,10 @@
 
 export class addr_transform {
 
-    #moduleName = ""
+    #moduleName = ''
 
-    constructor(moduleName: string) {
-        this.#moduleName = moduleName ?? Process.enumerateModules()[0].name;
+    constructor(moduleName: string='') {
+        this.#moduleName = moduleName || Process.enumerateModules()[0].name;
     };
 
     module() {
@@ -30,13 +30,13 @@ export class addr_transform {
         return ( absValue & 0xffffffff );
     };
 
-    equal(addr: NativePointer, cmd="call") {
+    equal(addr: NativePointer, cmd='call') {
         let info = Instruction.parse( addr );
-        return [ info.mnemonic, info.opStr ].join(" ").includes( cmd.toLowerCase() );
+        return [ info.mnemonic, info.opStr ].join(' ').includes( cmd.toLowerCase() );
     };
 
     aobscan(pattern: string) {
-        for (const m of this.module().enumerateRanges("--x")) {
+        for (const m of this.module().enumerateRanges('--x')) {
             let match = Memory.scanSync(m.base, m.size, pattern);
             if (0 < match.length) return match;
         }
