@@ -24,10 +24,11 @@ export class addr_transform {
 
     imm64(addr: NativePointer) { return addr.readU64(); }
 
+    mem32(addr: NativePointer) { return addr.add(this.imm32(addr)).add(4) };
 
     call(addr: NativePointer) {
-        let absValue = this.rva(addr) + this.imm32( addr.add(1) ) + 5;
-        return ( absValue & 0xffffffff );
+        addr = addr.add(1);
+        return this.rva(this.mem32(addr));
     };
 
     equal(addr: NativePointer, cmd='call') {
