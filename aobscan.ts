@@ -8,15 +8,13 @@ export class addr_transform {
         this.#moduleName = moduleName || Process.enumerateModules()[0].name;
     };
 
-    module() {
-        return Process.getModuleByName(this.#moduleName);
-    };
+    module() { return Process.getModuleByName(this.#moduleName); };
 
     base() { return this.module().base; };
 
     va(rva: number) { return this.base().add(rva); };
 
-    rva(va: NativePointer) { return Number( va.sub(this.base()).and(0xffffffff) ); };
+    rva(va: NativePointer) { return Number(va.sub(this.base()).and(0xffffffff)); };
 
     imm8(addr: NativePointer) { return addr.readU8(); };
 
@@ -32,8 +30,8 @@ export class addr_transform {
     };
 
     equal(addr: NativePointer, cmd='call') {
-        let info = Instruction.parse( addr );
-        return [ info.mnemonic, info.opStr ].join(' ').includes( cmd.toLowerCase() );
+        let info = Instruction.parse(addr);
+        return [ info.mnemonic, info.opStr ].join(' ').includes(cmd.toLowerCase());
     };
 
     aobscan(pattern: string) {
