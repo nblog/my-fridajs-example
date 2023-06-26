@@ -11,12 +11,11 @@ rpc.exports.scan = function () {
             for (let index = 0; index < match.length; index++) {
                 let addr = match[index].address.sub(78);
 
-                if (match[index].address.and(255).equals(78)) {
-                    if (Process.findModuleByAddress(addr) === null)
-                        console.log(`mapping: [${0}]  ${addr}`);
-                }
-                else {
+                if (!match[index].address.and(255).equals(78)) {                    
                     console.log(`embedded: [${0}]  ${addr}`);
+                }
+                else if (Process.findModuleByAddress(addr) === null) {
+                    console.log(`mapping: [${0}]  ${addr}`);
                 }
             }
         } catch (error) { continue; }
