@@ -1,4 +1,4 @@
-///<reference path="C:\\Users\\r0th3r\\OneDrive\\Codes\\index.d.ts"/>
+///<reference path="index.d.ts"/>
 
 
 let symbols = {
