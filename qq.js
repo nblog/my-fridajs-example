@@ -1,4 +1,4 @@
-///<reference path='C:\\Users\\r0th3r\\OneDrive\\Codes\\index.d.ts'/>
+///<reference path='C:\\Users\\r0th3r\\OneDrive\\Code\\index.d.ts'/>
 
 
 
