@@ -71,26 +71,29 @@ Interceptor.attach(Module.getExportByName('ntdll.dll', 'ZwCreateFile'), {
     }
 });
 
-// Interceptor.attach(Module.getExportByName('kernel32.dll', 'DeviceIoControl'), {
-//     onEnter: function (args) {
-//         this.hFile = args[0];
+Interceptor.attach(Module.getExportByName('kernel32.dll', 'DeviceIoControl'), {
+    onEnter: function (args) {
+        this.hFile = args[0];
 
-//         this.ioctl = Number(args[1]);
-//         this.inBufferSize = Number(args[3]);
-//         this.outBufferSize = Number(args[5]);
+        this.ioctl = Number(args[1]);
+        this.inBufferSize = Number(args[3]);
+        this.outBufferSize = Number(args[5]); this.pbufferSize = args[6];
 
-//         this.inBuffer = args[2]; this.outBuffer = args[4];
-//     },
-//     onLeave: function (retval) {
-//         if (retval.equals(0)) return;
+        this.inBuffer = args[2]; this.outBuffer = args[4];
+    },
+    onLeave: function (retval) {
+        if (retval.equals(0)) return;
 
-//         let filename = has_name(this.hFile);
+        let filename = has_name(this.hFile);
 
-//         console.log(`ioctl(${filename}, ` +
-//         `${this.ioctl.toString(16)}, ` + 
-//         `..., ${this.inBufferSize}, ..., ${this.outBufferSize})` )
-//     }
-// });
+        let realBufferSize = this.pbufferSize.equals(0)
+            ? this.outBufferSize : this.pbufferSize.readU32();
+
+        console.log(`ioctl(${filename}, ` +
+        `${this.ioctl.toString(16)}, ` + 
+        `..., ${this.inBufferSize}, ..., ${this.outBufferSize}, ${realBufferSize})` )
+    }
+});
 
 Interceptor.attach(Module.getExportByName('kernel32.dll', 'ReadFile'), {
     onEnter: function (args) {
