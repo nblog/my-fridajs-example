@@ -50,13 +50,15 @@ Interceptor.attach(Module.getExportByName('ntdll.dll', 'ZwCreateFile'), {
     onEnter: function (args) {
         this.lpFileHandle = args[0];
 
-        let lpObjectAttributes = args[2];
-        if (!lpObjectAttributes.equals(NULL)) {
+        {
+            let lpObjectAttributes = args[2];
+            if (lpObjectAttributes.equals(NULL)) return;
+
             let ObjectName = lpObjectAttributes.add(2 * Process.pointerSize).readPointer();
-            if (!ObjectName.equals(NULL) && ObjectName.add(0).readU16()) {
-                let Buffer = ObjectName.add(Process.pointerSize).readPointer();
-                this.filename = Buffer.readUtf16String();
-            }
+            if (ObjectName.equals(NULL) && 0 == ObjectName.add(0).readU16()) return;
+
+            let Buffer = ObjectName.add(Process.pointerSize).readPointer();
+            this.filename = Buffer.readUtf16String();
         }
     },
     onLeave: function (retval) {
