@@ -124,7 +124,6 @@ Interceptor.attach(Module.getExportByName('kernel32.dll', 'ReadFile'), {
     }
 });
 
-
 Interceptor.attach(Module.getExportByName('kernel32.dll', 'WriteFile'), {
     onEnter: function (args) {
         this.currentPointer = current_pointer(args[0]);
