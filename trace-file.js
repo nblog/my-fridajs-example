@@ -1,7 +1,7 @@
 ///<reference path='C:\\Users\\r0th3r\\OneDrive\\Code\\index.d.ts'/>
 
 
-const view_length = 16; // view length of buffer
+const view_length = 16; // view length of buffer, `-1` for all
 var opened_files = new Map/*<Number, String>*/(); // <FileHandle, FileName>
 
 
@@ -89,9 +89,23 @@ Interceptor.attach(Module.getExportByName('kernel32.dll', 'DeviceIoControl'), {
         let realBufferSize = this.pbufferSize.equals(0)
             ? this.outBufferSize : this.pbufferSize.readU32();
 
-        console.log(`ioctl(${filename}, ` +
-        `${this.ioctl.toString(16)}, ` + 
-        `..., ${this.inBufferSize}, ..., ${this.outBufferSize}, ${realBufferSize})` )
+        console.log(
+            `ioctl(${filename}, ` +
+            `${this.ioctl.toString(16)}, ` + 
+            `..., ${this.inBufferSize}, ..., ${this.outBufferSize}, ${realBufferSize})`);
+
+        if (0 != view_length) {
+            if (-1 == view_length) view_length = realBufferSize;
+            /* IN */
+            console.log(
+                hexdump(this.inBuffer.readByteArray(this.inBufferSize),
+                { offset: 0, length: this.inBufferSize, header: false, ansi: true }));
+
+            /* OUT */
+            console.log(
+                hexdump(this.outBuffer.readByteArray(view_length),
+                { offset: 0, length: view_length, header: false, ansi: true }));
+        }
     }
 });
 
@@ -116,7 +130,9 @@ Interceptor.attach(Module.getExportByName('kernel32.dll', 'ReadFile'), {
             `read<${this.currentPointer.toString(16)}>` + 
             `(${filename}, ..., ${this.bufferSize}, ${realBufferSize})`);
 
-        if (view_length) {
+        if (0 != view_length) {
+            if (-1 == view_length) view_length = realBufferSize;
+
             console.log(
                 hexdump(this.buffer.readByteArray(view_length), 
                 { offset: 0, length: view_length, header: false, ansi: true }));
@@ -145,7 +161,9 @@ Interceptor.attach(Module.getExportByName('kernel32.dll', 'WriteFile'), {
             `write<${this.currentPointer.toString(16)}>` + 
             `(${filename}, ..., ${this.bufferSize}, ${realBufferSize})`);
 
-        if (view_length) {
+        if (0 != view_length) {
+            if (-1 == view_length) view_length = realBufferSize;
+    
             console.log(
                 hexdump(this.buffer.readByteArray(view_length), 
                 { offset: 0, length: view_length, header: false, ansi: true }));
