@@ -94,18 +94,23 @@ Interceptor.attach(Module.getExportByName('kernel32.dll', 'DeviceIoControl'), {
             `${this.ioctl.toString(16)}, ` + 
             `..., ${this.inBufferSize}, ..., ${this.outBufferSize}, ${realBufferSize})`);
 
-        if (0 != view_length) {
-            if (-1 == view_length) view_length = realBufferSize;
-            /* IN */
+        if (-1 === view_length) view_length = realBufferSize;
+
+        /* IN */
+        if (this.inBufferSize) {
             console.log(
                 hexdump(this.inBuffer.readByteArray(this.inBufferSize),
                 { offset: 0, length: this.inBufferSize, header: false, ansi: true }));
+        } else console.log('IN:  NaN')
 
-            /* OUT */
+        console.log('--------------------------------' + '--------------------------------');
+
+        /* OUT */
+        if (realBufferSize && view_length) {
             console.log(
                 hexdump(this.outBuffer.readByteArray(view_length),
                 { offset: 0, length: view_length, header: false, ansi: true }));
-        }
+        } else console.log('OUT:  NaN')
     }
 });
 
@@ -130,9 +135,9 @@ Interceptor.attach(Module.getExportByName('kernel32.dll', 'ReadFile'), {
             `read<${this.currentPointer.toString(16)}>` + 
             `(${filename}, ..., ${this.bufferSize}, ${realBufferSize})`);
 
-        if (0 != view_length) {
-            if (-1 == view_length) view_length = realBufferSize;
+        if (-1 === view_length) view_length = realBufferSize;
 
+        if (realBufferSize && view_length) {
             console.log(
                 hexdump(this.buffer.readByteArray(view_length), 
                 { offset: 0, length: view_length, header: false, ansi: true }));
@@ -161,9 +166,9 @@ Interceptor.attach(Module.getExportByName('kernel32.dll', 'WriteFile'), {
             `write<${this.currentPointer.toString(16)}>` + 
             `(${filename}, ..., ${this.bufferSize}, ${realBufferSize})`);
 
-        if (0 != view_length) {
-            if (-1 == view_length) view_length = realBufferSize;
-    
+        if (-1 === view_length) view_length = realBufferSize;
+
+        if (realBufferSize && view_length) {
             console.log(
                 hexdump(this.buffer.readByteArray(view_length), 
                 { offset: 0, length: view_length, header: false, ansi: true }));
