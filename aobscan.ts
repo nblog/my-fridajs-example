@@ -16,11 +16,11 @@ export class addr_transform {
 
     rva(va: NativePointer) { return Number(va.sub(this.base()).and(0xffffffff)); };
 
-    imm8(addr: NativePointer) { return addr.readU8(); };
+    imm8(addr: NativePointer) { return addr.readS8(); };
 
-    imm32(addr: NativePointer) { return addr.readU32(); };
+    imm32(addr: NativePointer) { return addr.readS32(); };
 
-    imm64(addr: NativePointer) { return addr.readU64(); }
+    imm64(addr: NativePointer) { return addr.readS64(); }
 
     mem32(addr: NativePointer) { return addr.add(this.imm32(addr)).add(4) };
 
