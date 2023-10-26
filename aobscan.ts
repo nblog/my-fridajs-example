@@ -18,15 +18,17 @@ export class addr_transform {
 
     imm8(addr: NativePointer) { return addr.readS8(); };
 
+    imm16(addr: NativePointer) { return addr.readS16(); };
+
     imm32(addr: NativePointer) { return addr.readS32(); };
 
     imm64(addr: NativePointer) { return addr.readS64(); }
 
-    mem32(addr: NativePointer) { return addr.add(this.imm32(addr)).add(4) };
+    rel32(addr: NativePointer) { return addr.add(this.imm32(addr)).add(4) };
 
     call(addr: NativePointer) {
         addr = addr.add(1);
-        return this.rva(this.mem32(addr));
+        return this.rva(this.rel32(addr));
     };
 
     equal(addr: NativePointer, cmd='call') {
