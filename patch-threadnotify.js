@@ -96,17 +96,19 @@ function GetLdrpInitialize()
 
 /* https://github.com/mq1n/DLLThreadInjectionDetector/blob/master/DLLInjectionDetector/ThreadCheck.cpp */
 const LdrpInitialize = GetLdrpInitialize();
+Interceptor.attach(LdrpInitialize, {
+onEnter(args) {
+        this.target = GetThreadStartAddress();
+        /* WOW */
+        this.arrbackup = new Uint8Array(this.target.readByteArray(1));
+    },
+    onLeave(retval) {
+        if (0 != retval.toInt32()) return;
 
-Interceptor.replace(LdrpInitialize, new NativeCallback(
-    function (ContextRecord, Parameter) {
-        const target = GetThreadStartAddress();
-        let backup = new Uint8Array(target.readByteArray(1));
-
-        const ntstatus = LdrpInitialize(ContextRecord, Parameter);
-
-        if (null == Process.findModuleByAddress(target)
-        && target.readU8() != backup[0])
-            target.writeByteArray(backup);
-
-        return ntstatus;
-    }, 'uint32', ['pointer', 'pointer']));
+        if (this.target.readU8() != this.arrbackup[0] &&
+            null == Process.findModuleByAddress(this.target))
+        {
+            this.target.writeByteArray(this.arrbackup);
+        }
+    }
+});
