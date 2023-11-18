@@ -1,10 +1,9 @@
-///<reference path="index.d.ts"/>
+///<reference path='C:\Users\r0th3r\OneDrive\Code\index.d.ts'/>
 
 
 let symbols = {
-    /* custom */
-    ptr_curl_easy_setopt: Module.getExportByName('libcurl.dll', 'curl_easy_setopt'),
-    ptr_curl_easy_perform: Module.getExportByName('libcurl.dll', 'curl_easy_perform'),
+    ptr_curl_easy_setopt: Module.getExportByName(null, 'curl_easy_setopt'),
+    ptr_curl_easy_perform: Module.getExportByName(null, 'curl_easy_perform'),
 
     abi: 8 == Process.pointerSize ? 'default' : 'mscdecl',
 
