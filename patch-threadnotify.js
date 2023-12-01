@@ -149,39 +149,61 @@ function ExecInAnyThread(threadHandle=NULL, func=function(parameter){})
 }
 
 
-function GetLdrpInitialize()
+// function patchThreadNotify2(m) 
+// {
+//     function GetLdrpCallInitRoutine()
+//     {
+//         return new NativeFunction(
+//             Module.getBaseAddress('ntdll.dll').add(/* SYMBOL RVA */),
+//             'bool', ['pointer', 'pointer', 'uint32', 'pointer']);
+//     }
+//     const LdrpCallInitRoutine = GetLdrpCallInitRoutine();
+//     Interceptor.replace(LdrpCallInitRoutine, new NativeCallback(function(
+//         InitRoutine, DllHandle, Reason, Context) {
+//             /* patch threadnotify */
+//             if (Reason == 2 /* DLL_THREAD_ATTACH */ && DllHandle.equals(m.base)) return 0;
+
+//             return LdrpCallInitRoutine(InitRoutine, DllHandle, Reason, Context);
+//         }, 'bool', ['pointer', 'pointer', 'uint32', 'pointer'])
+//     );
+// }
+// patchThreadNotify2(Process.enumerateModules()[0]);
+
+function patchThreadNotify()
 {
-    let LdrpInitialize = NULL;
-    const LdrInitializeThunk = Module.getExportByName('ntdll', 'LdrInitializeThunk');
+    function GetLdrpInitialize()
+    {
+        let LdrpInitialize = NULL;
+        const LdrInitializeThunk = Module.getExportByName('ntdll', 'LdrInitializeThunk');
 
-    let target = LdrInitializeThunk;
-    for (;;) {
-        const i = Instruction.parse(target);
-        if (i.mnemonic === 'call') {
-            LdrpInitialize = ptr(i.opStr);
-            break;
+        let target = LdrInitializeThunk;
+        for (;;) {
+            const i = Instruction.parse(target);
+            if (i.mnemonic === 'call') {
+                LdrpInitialize = ptr(i.opStr);
+                break;
+            }
+            target = i.next;
         }
-        target = i.next;
+        return new NativeFunction(LdrpInitialize, 'uint32', ['pointer', 'pointer']);
     }
-    return new NativeFunction(LdrpInitialize, 'uint32', ['pointer', 'pointer']);
-}
 
+    /* https://github.com/mq1n/DLLThreadInjectionDetector/blob/master/DLLInjectionDetector/ThreadCheck.cpp */
+    const LdrpInitialize = GetLdrpInitialize();
+    Interceptor.attach(LdrpInitialize, {
+    onEnter(args) {
+            this.target = GetThreadStartAddress();
+            /* WOW */
+            this.arrbackup = new Uint8Array(this.target.readByteArray(1));
+        },
+        onLeave(retval) {
+            /* if (0 != retval.toInt32()) return; */
 
-/* https://github.com/mq1n/DLLThreadInjectionDetector/blob/master/DLLInjectionDetector/ThreadCheck.cpp */
-const LdrpInitialize = GetLdrpInitialize();
-Interceptor.attach(LdrpInitialize, {
-onEnter(args) {
-        this.target = GetThreadStartAddress();
-        /* WOW */
-        this.arrbackup = new Uint8Array(this.target.readByteArray(1));
-    },
-    onLeave(retval) {
-        if (0 != retval.toInt32()) return;
-
-        if (this.target.readU8() != this.arrbackup[0] &&
-            null == Process.findModuleByAddress(this.target))
-        {
-            this.target.writeByteArray(this.arrbackup);
+            if (this.target.readU8() != this.arrbackup[0] &&
+                null == Process.findModuleByAddress(this.target))
+            {
+                this.target.writeByteArray(this.arrbackup);
+            }
         }
-    }
-});
+    });
+} patchThreadNotify();
