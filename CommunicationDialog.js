@@ -20,6 +20,9 @@ function CommunicationDialog(parameter=NULL)
     );
     function MsgOnlyWndProc(hwnd=NULL, message=0, wParam=NULL, lParam=NULL)
     {
+        if (message === 0x0001 /* WM_CREATE */) {
+            /* TODO */
+        }
         if (message === 0x0002 /* WM_DESTROY */) {
             new NativeFunction(
                 Module.getExportByName('user32.dll', 'PostQuitMessage'),
@@ -33,8 +36,8 @@ function CommunicationDialog(parameter=NULL)
             let cbData = pcds.add(Process.pointerSize * 1).readU32();
             let lpData = pcds.add(Process.pointerSize * 2).readPointer();
             // let data = Memory.readByteArray(lpData, cbData);
-            // let str = Memory.readUtf16String(lpData);
-            // console.log('WM_COPYDATA', dwData, cbData, lpData, data, str);
+            let dataJson = lpData.readUtf8String();
+            console.log(`ID: ${dwData}\nDATA: ${dataJson}`);
         }
     
         return DefWindowProc(hwnd, message, wParam, lParam);
