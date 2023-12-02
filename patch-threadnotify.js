@@ -166,8 +166,7 @@ function ExecInAnyThread(threadHandle=NULL, func=function(parameter){})
 //             return LdrpCallInitRoutine(InitRoutine, DllHandle, Reason, Context);
 //         }, 'bool', ['pointer', 'pointer', 'uint32', 'pointer'])
 //     );
-// }
-// patchThreadNotify2(Process.enumerateModules()[0]);
+// } patchThreadNotify2(Process.enumerateModules()[0]);
 
 function patchThreadNotify()
 {
