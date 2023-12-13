@@ -67,8 +67,7 @@ function GetThreadStartAddress(threadHandle=NULL)
         threadStartAddress, Process.pointerSize, NULL);
     return 0 == ntstatus ? threadStartAddress.readPointer() : NULL;
 }
-let thumb = NULL; let routine = NULL;
-function ExecInAnyThread(threadHandle=NULL, func=function(parameter){})
+function ExecInAnyThread(threadHandle=NULL, func=function(parameter){}, parameter=NULL)
 {
     const GetLastError = new NativeFunction(
         Module.getExportByName('kernel32', 'GetLastError'),
@@ -85,7 +84,6 @@ function ExecInAnyThread(threadHandle=NULL, func=function(parameter){})
     const ResumeThread = new NativeFunction(
         Module.getExportByName('kernel32', 'ResumeThread'),
         'uint32', ['pointer']);
-
     const CloseHandle = new NativeFunction(
         Module.getExportByName('kernel32', 'CloseHandle'),
         'uint32', ['pointer']);
@@ -98,27 +96,34 @@ function ExecInAnyThread(threadHandle=NULL, func=function(parameter){})
     const WaitForSingleObject = new NativeFunction(
         Module.getExportByName('kernel32', 'WaitForSingleObject'),
         'uint32', ['pointer', 'uint32']);
+    const PostThreadMessageW = new NativeFunction(
+        Module.getExportByName('user32', 'PostThreadMessageW'),
+        'bool', ['uint32', 'uint32', 'pointer', 'pointer']);
 
+    /* attach thread */
     const threadId = new NativeFunction(
         Module.getExportByName('kernel32', 'GetThreadId'),
         'uint32', ['pointer'])(threadHandle);
 
+    let thumb = NULL;
+    let routine = new NativeCallback(function(hEvent) {
+        func(parameter);
+        new NativeFunction(
+            Module.getExportByName('kernel32', 'SetEvent'),
+            'bool', ['pointer'])(hEvent);
+    }, 'void', ['pointer']);
     Process.enumerateThreads().forEach(function(thread) {
         if (thread.id != threadId) return;
 
         let hEvent = CreateEventW(NULL, 1, 0, Memory.allocUtf16String('fridajs-rpc-event'));
         ResetEvent(hEvent);
 
-        routine = new NativeCallback(func, 'void', ['pointer']);
         thumb = Memory.alloc(Process.pageSize);
         Memory.patchCode(thumb, Process.pageSize, code => {
             const cw = new X86Writer(code, { pc: thumb });
             cw.putPushax();
             cw.putPushfx();
-            cw.putMovRegAddress('rax', routine);
-            cw.putCallRegWithArguments('rax', [NULL]);
-            cw.putMovRegAddress('rax', Module.getExportByName('kernel32', 'SetEvent'));
-            cw.putCallRegWithArguments('rax', [hEvent]);
+            cw.putCallAddressWithArguments(routine, [hEvent]);
             cw.putPopfx();
             cw.putPopax();
             cw.putJmpAddress(thread.context.pc);
@@ -140,13 +145,21 @@ function ExecInAnyThread(threadHandle=NULL, func=function(parameter){})
 
         ResumeThread(threadHandle);
 
+        /* hi */
+        PostThreadMessageW(thread.id, 0x0000 /* WM_NULL */, NULL, NULL);
+
         WaitForSingleObject(hEvent, 30 * 1000 /* 30s */);
 
         if (hEvent != NULL) CloseHandle(hEvent);
-
-        return;
     });
 }
+/*
+GetThreadFunctionFromThreadId(Process.enumerateThreads()[0].id, function(hThread) {
+    ExecInAnyThread(hThread, function(parameter) {
+        console.log(`[+] Executed Thread Id: ${Process.getCurrentThreadId()} ${parameter}`);
+    }, ptr(0x1337));
+});
+*/
 
 
 // function patchThreadNotify2(m) 
