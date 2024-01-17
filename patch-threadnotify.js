@@ -1,7 +1,7 @@
 ///<reference path='C:\Users\r0th3r\OneDrive\Code\index.d.ts'/>
 
 
-function GetThreadFunctionFromThreadId(threadId=0, func=function(hThread){})
+function GetThreadFunctionFromThreadId(threadId=0, func=function(hThread=ptr(-2)){})
 {
     const CloseHandle = new NativeFunction(
         Module.getExportByName('kernel32', 'CloseHandle'),
@@ -67,7 +67,7 @@ function GetThreadStartAddress(threadHandle=NULL)
         threadStartAddress, Process.pointerSize, NULL);
     return 0 == ntstatus ? threadStartAddress.readPointer() : NULL;
 }
-function ExecInAnyThread(threadHandle=NULL, func=function(parameter){}, parameter=NULL)
+function ExecInAnyThread(threadHandle=NULL, func=function(parameter=NULL){}, parameter=NULL)
 {
     const GetLastError = new NativeFunction(
         Module.getExportByName('kernel32', 'GetLastError'),
