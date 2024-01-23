@@ -16,17 +16,17 @@ export class addr_transform {
 
     rva(va: NativePointer) { return Number(va.sub(this.base()).and(0x7fffffff)); };
 
-    imm8(addr: NativePointer) { return addr.readS8(); };
+    imm8(addr: NativePointer) { return addr.readU8(); };
 
-    imm16(addr: NativePointer) { return addr.readS16(); };
+    imm16(addr: NativePointer) { return addr.readU16(); };
 
-    imm32(addr: NativePointer) { return addr.readS32(); };
+    imm32(addr: NativePointer) { return addr.readU32(); };
 
-    imm64(addr: NativePointer) { return addr.readS64(); }
+    imm64(addr: NativePointer) { return addr.readU64(); }
 
-    mem32(addr) { return this.rva(addr.add(this.imm32(addr)).add(4)); };
+    mem32(addr: NativePointer) { return this.rva(addr.add(addr.readS32()).add(4)); };
 
-    call(addr) { return this.mem32(addr.add(1)); };
+    call(addr: NativePointer) { return this.mem32(addr.add(1)); };
 
     equal(addr: NativePointer, cmd='call') {
         let info = Instruction.parse(addr);
