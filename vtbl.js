@@ -64,9 +64,7 @@ class vftableHelper {
     #has_exec(addr) {
         if ( addr.equals(NULL) ) return false;
 
-        /* https://docs.microsoft.com/windows/win32/api/winbase/nf-winbase-isbadcodeptr */
-        return 0 == new NativeFunction(
-            Module.getExportByName("kernel32.dll", "IsBadCodePtr"), 
-            "bool", [ "pointer" ])(addr);
+        /* frida >= 16.2.0 */
+        return Memory.queryProtection(addr).endsWith('x');
     }
 }
