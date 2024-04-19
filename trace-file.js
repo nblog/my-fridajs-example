@@ -1,14 +1,17 @@
 ///<reference path='C:\\Users\\r0th3r\\OneDrive\\Code\\index.d.ts'/>
 
 
-const view_length = 16; // view length of buffer, `-1` for all
-var opened_files = new Map/*<Number, String>*/(); // <FileHandle, FileName>
+
+var cfg = {
+    preview_length: -1, // `-1` for all
+    opened_files: new Map/*<NativePointer, String>*/(), // <FileHandle, FileName>
+};
 
 
 function has_name(hObject) {
     let hFile = Number(hObject);
-    return opened_files.has(hFile) ? 
-        `\"${opened_files.get(hFile)}\"` : hFile.toString(16);
+    return cfg.opened_files.has(hFile) ? 
+        `\"${cfg.opened_files.get(hFile)}\"` : hObject.toString(16);
 }
 
 function current_pointer(hFile) {
@@ -28,23 +31,9 @@ Interceptor.attach(Module.getExportByName('kernel32.dll', 'CloseHandle'), {
     },
     onLeave: function (retval) {
         if (retval.equals(0)) return;
-
-        let hFile = Number(this.hObject);
-        if (opened_files.has(hFile)) opened_files.delete(hFile);
+        cfg.opened_files.delete(Number(this.hObject));
     }
 });
-
-// Interceptor.attach(Module.getExportByName('kernelbase.dll', 'CreateFileW'), {
-//     onEnter: function (args) {
-//         this.filename = args[0].readUtf16String();
-//     },
-//     onLeave: function (retval) {
-//         if (retval.equals(0) || retval.equals(-1)) return;
-
-//         let hFile = Number(retval);
-//         opened_files.set(hFile, this.filename);
-//     }
-// });
 
 Interceptor.attach(Module.getExportByName('ntdll.dll', 'ZwCreateFile'), {
     onEnter: function (args) {
@@ -64,55 +53,15 @@ Interceptor.attach(Module.getExportByName('ntdll.dll', 'ZwCreateFile'), {
     onLeave: function (retval) {
         /* STATUS_SUCCESS */
         if (!retval.equals(0)) return;
+
         let FileHandle = this.lpFileHandle.readPointer();
 
-        if (FileHandle.equals(0) || FileHandle.equals(-1)) return;
+        /* INVALID_HANDLE_VALUE */
+        if (FileHandle.equals(-1) || FileHandle.equals(0)) return;
 
-        let hFile = Number(FileHandle);
-        opened_files.set(hFile, this.filename);
-    }
-});
+        cfg.opened_files.set(Number(FileHandle), this.filename);
 
-Interceptor.attach(Module.getExportByName('kernel32.dll', 'DeviceIoControl'), {
-    onEnter: function (args) {
-        this.hFile = args[0];
-
-        this.ioctl = Number(args[1]);
-        this.inBufferSize = Number(args[3]);
-        this.outBufferSize = Number(args[5]); this.pbufferSize = args[6];
-
-        this.inBuffer = args[2]; this.outBuffer = args[4];
-    },
-    onLeave: function (retval) {
-        if (retval.equals(0)) return;
-
-        let filename = has_name(this.hFile);
-
-        let realBufferSize = this.pbufferSize.equals(0)
-            ? this.outBufferSize : this.pbufferSize.readU32();
-
-        console.log(
-            `ioctl(${filename}, ` +
-            `${this.ioctl.toString(16)}, ` + 
-            `..., ${this.inBufferSize}, ..., ${this.outBufferSize}, ${realBufferSize})`);
-
-        if (-1 === view_length) view_length = realBufferSize;
-
-        /* IN */
-        if (this.inBufferSize) {
-            console.log(
-                hexdump(this.inBuffer.readByteArray(this.inBufferSize),
-                { offset: 0, length: this.inBufferSize, header: false, ansi: true }));
-        } else console.log('IN:  NaN')
-
-        console.log('--------------------------------' + '--------------------------------');
-
-        /* OUT */
-        if (realBufferSize && view_length) {
-            console.log(
-                hexdump(this.outBuffer.readByteArray(view_length),
-                { offset: 0, length: view_length, header: false, ansi: true }));
-        } else console.log('OUT:  NaN')
+        console.log(`open(${has_name(FileHandle)}) -> ${FileHandle.toString(16)}`);
     }
 });
 
@@ -128,22 +77,19 @@ Interceptor.attach(Module.getExportByName('kernel32.dll', 'ReadFile'), {
     onLeave: function (retval) {
         if (retval.equals(0)) return;
 
-        let filename = has_name(this.hFile);
-
         let realBufferSize = this.pbufferSize.equals(0)
             ? this.bufferSize : this.pbufferSize.readU32();
 
         console.log(
             `read<${this.currentPointer.toString(16)}>` + 
-            `(${filename}, ..., ${this.bufferSize}, ${realBufferSize})`);
+            `(${has_name(this.hFile)}, ` + 
+            `..., ${this.bufferSize}, ${realBufferSize})`);
 
-        if (-1 === view_length) view_length = realBufferSize;
+        if (0 === realBufferSize || 0 === cfg.preview_length) return;
 
-        if (realBufferSize && view_length) {
-            console.log(
-                hexdump(this.buffer.readByteArray(view_length), 
-                { offset: 0, length: view_length, header: false, ansi: true }));
-        }
+        console.log(
+            hexdump(this.buffer.readByteArray(-1 === cfg.preview_length ? realBufferSize : cfg.preview_length),
+            { offset: 0, header: false, ansi: true }));
     }
 });
 
@@ -159,21 +105,60 @@ Interceptor.attach(Module.getExportByName('kernel32.dll', 'WriteFile'), {
     onLeave: function (retval) {
         if (retval.equals(0)) return;
 
-        let filename = has_name(this.hFile);
-
         let realBufferSize = this.pbufferSize.equals(0)
             ? this.bufferSize : this.pbufferSize.readU32();
 
         console.log(
             `write<${this.currentPointer.toString(16)}>` + 
-            `(${filename}, ..., ${this.bufferSize}, ${realBufferSize})`);
+            `(${has_name(this.hFile)}, ` + 
+            `..., ${this.bufferSize}, ${realBufferSize})`);
 
-        if (-1 === view_length) view_length = realBufferSize;
+        if (0 === realBufferSize || 0 === cfg.preview_length) return;
 
-        if (realBufferSize && view_length) {
-            console.log(
-                hexdump(this.buffer.readByteArray(view_length), 
-                { offset: 0, length: view_length, header: false, ansi: true }));
-        }
+        console.log(
+            hexdump(this.buffer.readByteArray(-1 === cfg.preview_length ? realBufferSize : cfg.preview_length),
+            { offset: 0, header: false, ansi: true }));
     }
 });
+
+
+// Interceptor.attach(Module.getExportByName('kernel32.dll', 'DeviceIoControl'), {
+//     onEnter: function (args) {
+//         this.hFile = args[0];
+
+//         this.ioctl = Number(args[1]);
+//         this.inBufferSize = Number(args[3]);
+//         this.outBufferSize = Number(args[5]); this.pbufferSize = args[6];
+
+//         this.inBuffer = args[2]; this.outBuffer = args[4];
+//     },
+//     onLeave: function (retval) {
+//         if (retval.equals(0)) return;
+
+//         let realBufferSize = this.pbufferSize.equals(0)
+//             ? this.outBufferSize : this.pbufferSize.readU32();
+
+//         console.log(
+//             `ioctl(${has_name(this.hFile)}, ` +
+//             `${this.ioctl.toString(16)}, ` + 
+//             `..., ${this.inBufferSize}, ..., ${this.outBufferSize}, ${realBufferSize})`);
+
+//         if (0 === cfg.preview_length) return;
+
+//         /* IN */
+//         if (0 < this.inBufferSize) {
+//             console.log(
+//                 hexdump(this.inBuffer.readByteArray(-1 === cfg.preview_length ? this.inBufferSize : cfg.preview_length),
+//                 { offset: 0, header: false, ansi: true }));
+//         } else console.log('IN:  NaN')
+
+//         console.log('--------------------------------' + '--------------------------------');
+
+//         /* OUT */
+//         if (0 < realBufferSize) {
+//             console.log(
+//                 hexdump(this.outBuffer.readByteArray(-1 === cfg.preview_length ? realBufferSize : cfg.preview_length),
+//                 { offset: 0, header: false, ansi: true }));
+//         } else console.log('OUT:  NaN')
+//     }
+// });
