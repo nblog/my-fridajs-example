@@ -9,14 +9,14 @@ var cfg = {
 
 
 function has_name(hObject) {
-    let hFile = Number(hObject);
+    const hFile = Number(hObject);
     return cfg.opened_files.has(hFile) ? 
         `\"${cfg.opened_files.get(hFile)}\"` : hObject.toString(16);
 }
 
 function current_pointer(hFile) {
     const FILE_CURRENT = 1;
-    let lpliNew = Memory.alloc(8);
+    const lpliNew = Memory.alloc(8);
 
     return new NativeFunction(
         Module.getExportByName('kernel32.dll', 'SetFilePointerEx'),
@@ -40,26 +40,26 @@ Interceptor.attach(Module.getExportByName('ntdll.dll', 'ZwCreateFile'), {
         this.lpFileHandle = args[0];
 
         {
-            let lpObjectAttributes = args[2];
+            const lpObjectAttributes = args[2];
             if (lpObjectAttributes.equals(NULL)) return;
 
-            let ObjectName = lpObjectAttributes.add(2 * Process.pointerSize).readPointer();
+            const ObjectName = lpObjectAttributes.add(2 * Process.pointerSize).readPointer();
             if (ObjectName.equals(NULL) && 0 == ObjectName.add(0).readU16()) return;
 
-            let Buffer = ObjectName.add(Process.pointerSize).readPointer();
-            this.filename = Buffer.readUtf16String();
+            const Buffer = ObjectName.add(Process.pointerSize).readPointer();
+            this.FileName = Buffer.readUtf16String();
         }
     },
     onLeave: function (retval) {
         /* STATUS_SUCCESS */
         if (!retval.equals(0)) return;
 
-        let FileHandle = this.lpFileHandle.readPointer();
+        const FileHandle = this.lpFileHandle.readPointer();
 
         /* INVALID_HANDLE_VALUE */
         if (FileHandle.equals(-1) || FileHandle.equals(0)) return;
 
-        cfg.opened_files.set(Number(FileHandle), this.filename);
+        cfg.opened_files.set(Number(FileHandle), this.FileName);
 
         console.log(`open(${has_name(FileHandle)}) -> ${FileHandle.toString(16)}`);
     }
@@ -77,7 +77,7 @@ Interceptor.attach(Module.getExportByName('kernel32.dll', 'ReadFile'), {
     onLeave: function (retval) {
         if (retval.equals(0)) return;
 
-        let realBufferSize = this.pbufferSize.equals(0)
+        const realBufferSize = this.pbufferSize.equals(0)
             ? this.bufferSize : this.pbufferSize.readU32();
 
         console.log(
@@ -105,7 +105,7 @@ Interceptor.attach(Module.getExportByName('kernel32.dll', 'WriteFile'), {
     onLeave: function (retval) {
         if (retval.equals(0)) return;
 
-        let realBufferSize = this.pbufferSize.equals(0)
+        const realBufferSize = this.pbufferSize.equals(0)
             ? this.bufferSize : this.pbufferSize.readU32();
 
         console.log(
@@ -135,7 +135,7 @@ Interceptor.attach(Module.getExportByName('kernel32.dll', 'WriteFile'), {
 //     onLeave: function (retval) {
 //         if (retval.equals(0)) return;
 
-//         let realBufferSize = this.pbufferSize.equals(0)
+//         const realBufferSize = this.pbufferSize.equals(0)
 //             ? this.outBufferSize : this.pbufferSize.readU32();
 
 //         console.log(
