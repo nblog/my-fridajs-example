@@ -1,16 +1,6 @@
 ///<reference path='C:\\Users\\r0th3r\\OneDrive\\Code\\index.d.ts'/>
 
 
-
-var cfg = {
-    preview_length: 16, // `-1` for all
-    opened_files: new Map/*<NativePointer, String>*/(), // <FileHandle, FileName>
-    has_name: function (hFile) {
-        return String(cfg.opened_files.has(Number(hFile)) ? 
-            `\"${cfg.opened_files.get(Number(hFile))}\"` : hFile.toString(16));
-    }
-};
-
 class utils {
     static current_pointer(hFile) {
         const FILE_CURRENT = 1;
@@ -22,7 +12,25 @@ class utils {
             'bool', ['pointer', 'int64', 'pointer', 'int32'])
             (hFile, 0, lpliNew, FILE_CURRENT) ? lpliNew.readS64() : 0;
     }
+    static try_get_file_name(hFile) {
+        const MAX_PATH = 260;
+        const lpFileName = Memory.alloc(MAX_PATH * 2);
+        const GetFinalPathNameByHandleW = new NativeFunction(
+            Module.getExportByName('kernel32.dll', 'GetFinalPathNameByHandleW'),
+            'uint32', ['pointer', 'pointer', 'uint32', 'uint32']);
+        GetFinalPathNameByHandleW(hFile, lpFileName, MAX_PATH, 0);
+        return lpFileName.readUtf16String() || hFile.toString(16);
+    }
 }
+
+var cfg = {
+    preview_length: 0, // `-1` for all
+    opened_files: new Map/*<NativePointer, String>*/(), // <FileHandle, FileName>
+    has_name: function (hFile) {
+        return String(cfg.opened_files.has(Number(hFile)) ? 
+            `\"${cfg.opened_files.get(Number(hFile))}\"` : utils.try_get_file_name(hFile));
+    }
+};
 
 class UNICODE_STRING {
     constructor(UString=NULL) {
