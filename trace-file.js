@@ -3,7 +3,7 @@
 
 
 var cfg = {
-    preview_length: -1, // `-1` for all
+    preview_length: 16, // `-1` for all
     opened_files: new Map/*<NativePointer, String>*/(), // <FileHandle, FileName>
     has_name: function (hFile) {
         return String(cfg.opened_files.has(Number(hFile)) ? 
@@ -15,7 +15,8 @@ class utils {
     static current_pointer(hFile) {
         const FILE_CURRENT = 1;
         const lpliNew = Memory.alloc(8);
-    
+        lpliNew.writeS64(0);
+
         return new NativeFunction(
             Module.getExportByName('kernel32.dll', 'SetFilePointerEx'),
             'bool', ['pointer', 'int64', 'pointer', 'int32'])
