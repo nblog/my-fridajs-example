@@ -35,19 +35,6 @@ const CreateFile = CreateFileW;
 
 
 /*
-const ATTACH_PARENT_PROCESS = -1;
-new NativeFunction(
-    Module.getExportByName('kernel32.dll', 'AttachConsole'),
-    'bool', ['uint32'])(ATTACH_PARENT_PROCESS);
-*/
-new NativeFunction(
-    Module.getExportByName('kernel32.dll', 'AllocConsole'),
-    'bool', [])();
-new NativeFunction(
-    Module.getExportByName('kernel32.dll', 'SetConsoleTitleA'),
-    'bool', ['pointer'])(Memory.allocUtf8String('Debug Console'));
-
-/*
 const stdin = new NativeFunction(
     Module.getExportByName('msvcrt.dll', '__iob_func'),
     'pointer', ['int'])(0);
@@ -69,25 +56,13 @@ const stderr = new NativeFunction(
     'pointer', ['int'])(2);
 
 /*
-new NativeFunction(
+const freopen = new NativeFunction(
     Module.getExportByName('msvcrt.dll', 'freopen'),
-    'pointer', ['pointer', 'pointer', 'pointer'])
-    (Memory.allocUtf8String('CONOUT$'), Memory.allocUtf8String('w'), stdout);
+    'pointer', ['pointer', 'pointer', 'pointer']);
 */
-new NativeFunction(
+const freopen = new NativeFunction(
     Module.getExportByName('ucrtbase.dll', 'freopen'),
-    'pointer', ['pointer', 'pointer', 'pointer'])
-    (Memory.allocUtf8String('CONOUT$'), Memory.allocUtf8String('w'), stdout);
-/*
-new NativeFunction(
-    Module.getExportByName('ucrtbase.dll', 'freopen'),
-    'pointer', ['pointer', 'pointer', 'pointer'])
-    (Memory.allocUtf8String('CONERR$'), Memory.allocUtf8String('w'), stderr);
-new NativeFunction(
-    Module.getExportByName('ucrtbase.dll', 'freopen'),
-    'pointer', ['pointer', 'pointer', 'pointer'])
-    (Memory.allocUtf8String('CONIN$'), Memory.allocUtf8String('r'), stdin);
-*/
+    'pointer', ['pointer', 'pointer', 'pointer']);
 
 
 
@@ -112,15 +87,37 @@ function KeyState(vkcode, ctrl=false, alt=false, shift=false) {
 }
 
 const timerId = setInterval(() => {
-    if (KeyState(0xC0/*VK_OEM_3*/, true)) {
-        console.log('Esc');
+    if (KeyState(0xC0/*VK_OEM_3*/, true))
+    {
+        /*
+        const ATTACH_PARENT_PROCESS = -1;
+        new NativeFunction(
+            Module.getExportByName('kernel32.dll', 'AttachConsole'),
+            'bool', ['uint32'])(ATTACH_PARENT_PROCESS);
+        */
+        new NativeFunction(
+            Module.getExportByName('kernel32.dll', 'AllocConsole'),
+            'bool', [])();
+        new NativeFunction(
+            Module.getExportByName('kernel32.dll', 'SetConsoleTitleA'),
+            'bool', ['pointer'])(Memory.allocUtf8String('Debug Console'));
+
+        /* freopen(Memory.allocUtf8String('CONIN$'), Memory.allocUtf8String('r'), stdin); */
+        freopen(Memory.allocUtf8String('CONOUT$'), Memory.allocUtf8String('w'), stdout);
+        /* freopen(Memory.allocUtf8String('CONERR$'), Memory.allocUtf8String('w'), stderr); */
+    }
+
+    if (KeyState(0x1B/*VK_ESCAPE*/, true))
+    {
         clearInterval(timerId);
     }
 
-    if (KeyState(0x70/*VK_F1*/)) {
-        console.log('F1');
+    if (KeyState(0x70/*VK_F1*/, true))
+    {
+        console.log('Ctrl F1');
     }
-    if (KeyState(0x71/*VK_F2*/)) {
-        console.log('F2');
+    if (KeyState(0x71/*VK_F2*/, true))
+    {
+        console.log('Ctrl F2');
     }
 }, 0.3 * 1000);
