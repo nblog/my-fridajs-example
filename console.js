@@ -98,13 +98,14 @@ const timerId = setInterval(() => {
         new NativeFunction(
             Module.getExportByName('kernel32.dll', 'AllocConsole'),
             'bool', [])();
-        new NativeFunction(
-            Module.getExportByName('kernel32.dll', 'SetConsoleTitleA'),
-            'bool', ['pointer'])(Memory.allocUtf8String('Debug Console'));
 
         /* freopen(Memory.allocUtf8String('CONIN$'), Memory.allocUtf8String('r'), stdin); */
         freopen(Memory.allocUtf8String('CONOUT$'), Memory.allocUtf8String('w'), stdout);
         /* freopen(Memory.allocUtf8String('CONERR$'), Memory.allocUtf8String('w'), stderr); */
+
+        new NativeFunction(
+            Module.getExportByName('kernel32.dll', 'SetConsoleTitleA'),
+            'bool', ['pointer'])(Memory.allocUtf8String('Debug Console'));
     }
 
     if (KeyState(0x1B/*VK_ESCAPE*/, true))
