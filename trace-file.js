@@ -19,17 +19,18 @@ class utils {
         const GetFinalPathNameByHandleW = new NativeFunction(
             Module.getExportByName('kernel32.dll', 'GetFinalPathNameByHandleW'),
             'uint32', ['pointer', 'pointer', 'uint32', 'uint32']);
-        GetFinalPathNameByHandleW(hFile, lpFileName, MAX_PATH, 0);
-        return lpFileName.readUtf16String() || hFile.toString(16);
+        GetFinalPathNameByHandleW(hFile, lpFileName, MAX_PATH, 0/*VOLUME_NAME_DOS*/);
+        return lpFileName.readUtf16String() || '';
     }
 }
 
 var cfg = {
     preview_length: 0, // `-1` for all
-    opened_files: new Map/*<NativePointer, String>*/(), // <FileHandle, FileName>
+    opened_files: new Map/*<NativePointer, String>*/(), /*<FileHandle, FileName>*/
     has_name: function (hFile) {
-        return String(cfg.opened_files.has(Number(hFile)) ? 
-            cfg.opened_files.get(Number(hFile)) : utils.try_get_file_name(hFile));
+        return utils.try_get_file_name(hFile) 
+        || cfg.opened_files.get(Number(hFile)) 
+        || hFile.toString(16);
     }
 };
 
@@ -115,7 +116,7 @@ Interceptor.attach(Module.getExportByName('kernel32.dll', 'ReadFile'), {
         if (0 === realBufferSize || 0 === cfg.preview_length) return;
 
         console.log(
-            hexdump(this.buffer.readByteArray(-1 === cfg.preview_length ? realBufferSize : cfg.preview_length),
+            hexdump(this.buffer.readByteArray(-1 === cfg.preview_length ? realBufferSize : Math.min(cfg.preview_length, realBufferSize)),
             { offset: 0, header: false, ansi: true }));
     }
 });
@@ -143,7 +144,7 @@ Interceptor.attach(Module.getExportByName('kernel32.dll', 'WriteFile'), {
         if (0 === realBufferSize || 0 === cfg.preview_length) return;
 
         console.log(
-            hexdump(this.buffer.readByteArray(-1 === cfg.preview_length ? realBufferSize : cfg.preview_length),
+            hexdump(this.buffer.readByteArray(-1 === cfg.preview_length ? realBufferSize : Math.min(cfg.preview_length, realBufferSize)),
             { offset: 0, header: false, ansi: true }));
     }
 });
@@ -174,7 +175,7 @@ Interceptor.attach(Module.getExportByName('kernel32.dll', 'DeviceIoControl'), {
 
         if (0 < this.inBufferSize) {
             console.log('IN:  \n' +
-                hexdump(this.inBuffer.readByteArray(-1 === cfg.preview_length ? this.inBufferSize : cfg.preview_length),
+                hexdump(this.inBuffer.readByteArray(-1 === cfg.preview_length ? this.inBufferSize : Math.min(cfg.preview_length, this.inBufferSize)),
                 { offset: 0, header: false, ansi: true }));
         } else console.log('IN:  NaN')
 
@@ -182,7 +183,7 @@ Interceptor.attach(Module.getExportByName('kernel32.dll', 'DeviceIoControl'), {
 
         if (0 < realBufferSize) {
             console.log('OUT:  \n' +
-                hexdump(this.outBuffer.readByteArray(-1 === cfg.preview_length ? realBufferSize : cfg.preview_length),
+                hexdump(this.outBuffer.readByteArray(-1 === cfg.preview_length ? realBufferSize : Math.min(cfg.preview_length, realBufferSize)),
                 { offset: 0, header: false, ansi: true }));
         } else console.log('OUT:  NaN')
     }
