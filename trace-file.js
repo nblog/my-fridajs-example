@@ -12,6 +12,7 @@ class utils {
             'bool', ['pointer', 'int64', 'pointer', 'int32'])
             (hFile, 0, lpliNew, FILE_CURRENT) ? lpliNew.readS64() : 0;
     }
+    /* https://learn.microsoft.com/windows/win32/memory/obtaining-a-file-name-from-a-file-handle */
     static try_get_file_name(hFile) {
         const MAX_PATH = 260;
         const lpFileName = Memory.alloc(MAX_PATH * 2);
@@ -28,7 +29,7 @@ var cfg = {
     opened_files: new Map/*<NativePointer, String>*/(), // <FileHandle, FileName>
     has_name: function (hFile) {
         return String(cfg.opened_files.has(Number(hFile)) ? 
-            `\"${cfg.opened_files.get(Number(hFile))}\"` : utils.try_get_file_name(hFile));
+            cfg.opened_files.get(Number(hFile)) : utils.try_get_file_name(hFile));
     }
 };
 
@@ -46,7 +47,7 @@ class UNICODE_STRING {
     }
     toString() {
         if (this.Length === 0 || this.Buffer.isNull()) return '';
-        return this.Buffer.readUtf16String();
+        return this.Buffer.readUtf16String() || '';
     }
 }
 
