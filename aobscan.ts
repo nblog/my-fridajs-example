@@ -26,7 +26,7 @@ export class addr_transform {
 
     mem32(addr: NativePointer) { return this.rva(addr.add(addr.readS32()).add(4)); };
 
-    call(addr: NativePointer) { return this.mem32(addr.add(1)); };
+    /*branch*/call(addr: NativePointer) { return this.mem32(addr.add(1)); };
 
     equal(addr: NativePointer, cmd='call') {
         let info = Instruction.parse(addr);
