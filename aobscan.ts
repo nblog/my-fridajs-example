@@ -29,15 +29,15 @@ export class addr_transform {
     /*branch*/call(addr: NativePointer) { return this.mem32(addr.add(1)); };
 
     equal(addr: NativePointer, cmd='call') {
-        let info = Instruction.parse(addr);
-        return [ info.mnemonic, info.opStr ].join(' ').includes(cmd.toLowerCase());
+        const info = Instruction.parse(addr);
+        return `${info.mnemonic} ${info.opStr}`.toLowerCase().includes(cmd.toLowerCase());
     };
 
     aobscan(pattern: string) {
+        const matches = [];
         for (const m of this.module().enumerateRanges('--x')) {
-            let match = Memory.scanSync(m.base, m.size, pattern);
-            if (0 < match.length) return match;
+            matches.push(...Memory.scanSync(m.base, m.size, pattern));
         }
-        return [];
+        return matches;
     };
 }
