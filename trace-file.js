@@ -19,7 +19,7 @@ class utils {
         const GetFinalPathNameByHandleW = new NativeFunction(
             Module.getExportByName('kernel32.dll', 'GetFinalPathNameByHandleW'),
             'uint32', ['pointer', 'pointer', 'uint32', 'uint32']);
-        GetFinalPathNameByHandleW(hFile, lpFileName, MAX_PATH, 0/*VOLUME_NAME_DOS*/);
+        GetFinalPathNameByHandleW(hFile, lpFileName, MAX_PATH, 0/*FILE_NAME_NORMALIZED*/);
         return lpFileName.readUtf16String() || '';
     }
 }
