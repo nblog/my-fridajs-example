@@ -43,7 +43,7 @@ function CommunicationDialog(parameter=NULL)
         return DefWindowProc(hwnd, message, wParam, lParam);
     } const WindowProcedure = new NativeCallback(MsgOnlyWndProc, 'pointer', ['pointer', 'uint32', 'pointer', 'pointer'])
 
-    const HWND_MESSAGE = ptr(-3);
+    /* https://learn.microsoft.com/windows/win32/dataxchg/using-data-copy */
     let className = Memory.allocUtf16String('Disp32Class');
     let hInstance = Process.enumerateModules()[0].base;
 
@@ -57,6 +57,8 @@ function CommunicationDialog(parameter=NULL)
         'uint16', ['pointer']
     )(lpWndClass);
 
+    /* https://learn.microsoft.com/windows/win32/winmsg/window-features#message-only-windows */
+    const HWND_MESSAGE = ptr(-3);
     let hWnd = new NativeFunction(
         Module.getExportByName('user32.dll', 'CreateWindowExW'),
         'pointer', ['uint32', 'pointer', 'pointer', 'uint32', 'int', 'int', 'int', 'int', 'pointer', 'pointer', 'pointer', 'pointer']
