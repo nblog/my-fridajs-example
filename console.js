@@ -95,17 +95,36 @@ const timerId = setInterval(() => {
             Module.getExportByName('kernel32.dll', 'AttachConsole'),
             'bool', ['uint32'])(ATTACH_PARENT_PROCESS);
         */
-        new NativeFunction(
+        let isOk = new NativeFunction(
             Module.getExportByName('kernel32.dll', 'AllocConsole'),
             'bool', [])();
 
-        /* freopen(Memory.allocUtf8String('CONIN$'), Memory.allocUtf8String('r'), stdin); */
-        freopen(Memory.allocUtf8String('CONOUT$'), Memory.allocUtf8String('w'), stdout);
-        /* freopen(Memory.allocUtf8String('CONERR$'), Memory.allocUtf8String('w'), stderr); */
+        if (isOk) {
+            freopen(Memory.allocUtf8String('CONOUT$'), Memory.allocUtf8String('w'), stdout);
+            /* freopen(Memory.allocUtf8String('CONERR$'), Memory.allocUtf8String('w'), stderr); */
+            /* freopen(Memory.allocUtf8String('CONIN$'), Memory.allocUtf8String('r'), stdin); */
 
-        new NativeFunction(
-            Module.getExportByName('kernel32.dll', 'SetConsoleTitleA'),
-            'bool', ['pointer'])(Memory.allocUtf8String('Debug Console'));
+            /*
+            const CP_UTF8 = 65001;
+            new NativeFunction(
+                Module.getExportByName('kernel32.dll', 'SetConsoleCP'),
+                'bool', ['uint32'])(CP_UTF8);
+            new NativeFunction(
+                Module.getExportByName('kernel32.dll', 'SetConsoleOutputCP'),
+                'bool', ['uint32'])(CP_UTF8);
+
+            new NativeFunction(
+                Module.getExportByName('kernel32.dll', 'SetConsoleCtrlHandler'),
+                'bool', ['pointer', 'bool'])(new NativeCallback((dwCtrlType) => {
+                    console.log('Ctrl+C');
+                    return false;
+                }, 'bool', ['uint32']), true);
+            */
+
+            new NativeFunction(
+                Module.getExportByName('kernel32.dll', 'SetConsoleTitleA'),
+                'bool', ['pointer'])(Memory.allocUtf8String('Debug Console'));
+        }
     }
 
     if (KeyState(0x1B/*VK_ESCAPE*/, true))
