@@ -2,9 +2,11 @@
 
 export class addr_transform {
 
+    #version = 'unknown'
     #moduleName = ''
 
-    constructor(moduleName: string='') {
+    constructor(moduleName: string='', version: string='') {
+        this.#version = version;
         this.#moduleName = moduleName || Process.enumerateModules()[0].name;
     };
 
