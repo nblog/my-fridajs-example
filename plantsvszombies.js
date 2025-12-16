@@ -78,7 +78,7 @@ rpc.exports = {
 class plantsvszombies {
     static target() {
         const FindWindow = new NativeFunction(
-            Module.getExportByName('user32.dll', 'FindWindowW'), 
+            Process.getModuleByName('user32.dll').getExportByName('FindWindowW'), 
             'pointer', ['pointer', 'pointer']);
         return FindWindow(Memory.allocUtf16String('MainWindow'), NULL);
     }
@@ -87,7 +87,7 @@ class plantsvszombies {
 
     get unicode() {
         const IsWindowUnicode = new NativeFunction(
-            Module.getExportByName('user32.dll', 'IsWindowUnicode'), 
+            Process.getModuleByName('user32.dll').getExportByName('IsWindowUnicode'), 
             'bool', ['pointer']);
         return Boolean(IsWindowUnicode(this.hWnd));
     }
@@ -95,10 +95,10 @@ class plantsvszombies {
     get WndProc() {
         /*
         const GetClassLongPtrW = new NativeFunction(
-            Module.getExportByName('user32.dll', 'GetClassLongW'),
+            Process.getModuleByName('user32.dll').getExportByName('GetClassLongW'),
             'pointer', ['pointer', 'int']);
         const GetClassLongPtrA = new NativeFunction(
-            Module.getExportByName('user32.dll', 'GetClassLongA'),
+            Process.getModuleByName('user32.dll').getExportByName('GetClassLongA'),
             'pointer', ['pointer', 'int']);
         const GCLP_WNDPROC = -24;
         let WndProc1 = GetClassLongPtrW(this.hWnd, GCLP_WNDPROC);
@@ -108,7 +108,7 @@ class plantsvszombies {
         */
 
         const GetWindowLongPtr = new NativeFunction(
-            Module.getExportByName('user32.dll', 
+            Process.getModuleByName('user32.dll').getExportByName(
                 this.unicode ? 'GetWindowLongW' : 'GetWindowLongA'), 
             'pointer', ['pointer', 'int']);
         const GWLP_WNDPROC = -4;
@@ -116,9 +116,9 @@ class plantsvszombies {
 
         if (WndProc1.isNull())
             if (this.unicode)
-                WndProc1 = Module.getExportByName('user32.dll', 'DefWindowProcW');
+                WndProc1 = Process.getModuleByName('user32.dll').getExportByName('DefWindowProcW');
             else
-                WndProc1 = Module.getExportByName('user32.dll', 'DefWindowProcA');
+                WndProc1 = Process.getModuleByName('user32.dll').getExportByName('DefWindowProcA');
 
         return new NativeFunction(WndProc1, 
             'pointer', ['pointer', 'uint', 'pointer', 'pointer']);
