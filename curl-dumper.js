@@ -16,7 +16,7 @@ let symbols = {
     mod_curl: Process.findModuleByName('libcurl.dll') || 
         Process.findModuleByName('libcurl.so') || 
         Process.findModuleByName('libcurl.dylib') ||
-        Process.mainModule,
+        Process.enumerateModules()[0],
 
     ptr_curl_easy_setopt: () => {
         return DebugSymbol.fromName('curl_easy_setopt')?.address ||
