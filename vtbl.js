@@ -1,12 +1,4 @@
-
-/*
-
-    vftable (Alpha)
-
-*/
-
-"use strict";
-
+///<reference path='C:/Users/r0th3r/OneDrive/Code/index.d.ts'/>
 
 
 

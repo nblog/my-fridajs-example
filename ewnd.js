@@ -1,11 +1,6 @@
-﻿
-/*
+﻿///<reference path='C:/Users/r0th3r/OneDrive/Code/index.d.ts'/>
 
-    reference: https://github.com/fjqisba/E-Debug
-    易语言窗口枚举 (Beta)
-
-*/
-
+/* reference: https://github.com/fjqisba/E-Debug */
 
 function ewnds() {
 

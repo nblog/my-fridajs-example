@@ -1,13 +1,10 @@
-///<reference path='C:\\Users\\r0th3r\\OneDrive\\Code\\index.d.ts'/>
-
-
+///<reference path='C:/Users/r0th3r/OneDrive/Code/index.d.ts'/>
 
 
 
 function assert (condition, msg) {
     if (!condition) throw new Error(`[ass] ${msg}`)
 }
-
 
 
 
@@ -29,7 +26,6 @@ let symbols = {
         return this.fuzzy_match(this.krnlutil(), "CheckVideoMsg@Msg@Util");
     }
 };
-
 
 
 
@@ -62,7 +58,6 @@ class CTXStringW {
         return String(buffer);
     }
 }
-
 
 
 
@@ -109,7 +104,6 @@ let GetNickname = function(uid=Number(0)) {
         let m = Memory.alloc( Process.pointerSize );
         return new CTXStringW( fn( m, uid ) ).str;
 }
-
 
 
 
