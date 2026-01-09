@@ -43,7 +43,7 @@ let symbols = {
 
 
 /* https://curl.se/libcurl/c/CURLOPT_DEBUGFUNCTION.html */
-let dumper = new NativeCallback((handle, type, data, size, clientp) => {
+const my_trace = new NativeCallback((handle, type, data, size, clientp) => {
     let curl_infotype = {
         CURLINFO_TEXT: 0,
         CURLINFO_HEADER_IN: 1,
@@ -91,8 +91,8 @@ Interceptor.replace(symbols.ptr_curl_easy_perform(),
         /* Apr 15, 2002: https://github.com/curl/curl/blob/curl-7_9_6/include/curl/curl.h#L534 */
         let CURLOPT_VERBOSE = 41;
         let CURLOPT_DEBUGFUNCTION = 20000 + 94;
+        symbols.curl_easy_setopt(easy_handle, CURLOPT_DEBUGFUNCTION, ptr(my_trace));
         symbols.curl_easy_setopt(easy_handle, CURLOPT_VERBOSE, ptr(1));
-        symbols.curl_easy_setopt(easy_handle, CURLOPT_DEBUGFUNCTION, ptr(dumper));
 
         return symbols.curl_easy_perform(easy_handle);
     }, 'int', ['pointer'], symbols.abi)
