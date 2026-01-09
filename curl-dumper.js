@@ -28,23 +28,22 @@ let symbols = {
     },
 
     /* https://curl.se/libcurl/c/curl_easy_setopt.html */
-    curl_easy_setopt: function(curl, option, parameter) {
+    curl_easy_setopt: function(handle, option, parameter) {
         return new NativeFunction(
             symbols.ptr_curl_easy_setopt(),
-            'int', ['pointer', 'uint', 'pointer'], symbols.abi)(curl, option, parameter);
+            'int', ['pointer', 'uint', 'pointer'], symbols.abi)(handle, option, parameter);
     },
     /* https://curl.se/libcurl/c/curl_easy_perform.html */
-    curl_easy_perform: function(curl) {
+    curl_easy_perform: function(easy_handle) {
         return new NativeFunction(
             symbols.ptr_curl_easy_perform(),
-            'int', ['pointer'], symbols.abi)(curl);
+            'int', ['pointer'], symbols.abi)(easy_handle);
     }
 };
 
 
 /* https://curl.se/libcurl/c/CURLOPT_DEBUGFUNCTION.html */
 let dumper = new NativeCallback((handle, type, data, size, clientp) => {
-
     let curl_infotype = {
         CURLINFO_TEXT: 0,
         CURLINFO_HEADER_IN: 1,
@@ -88,13 +87,13 @@ let dumper = new NativeCallback((handle, type, data, size, clientp) => {
 
 
 Interceptor.replace(symbols.ptr_curl_easy_perform(),
-    new NativeCallback((curl) => {
+    new NativeCallback((easy_handle) => {
         /* Apr 15, 2002: https://github.com/curl/curl/blob/curl-7_9_6/include/curl/curl.h#L534 */
         let CURLOPT_VERBOSE = 41;
         let CURLOPT_DEBUGFUNCTION = 20000 + 94;
-        symbols.curl_easy_setopt(curl, CURLOPT_VERBOSE, ptr(1));
-        symbols.curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, ptr(dumper));
+        symbols.curl_easy_setopt(easy_handle, CURLOPT_VERBOSE, ptr(1));
+        symbols.curl_easy_setopt(easy_handle, CURLOPT_DEBUGFUNCTION, ptr(dumper));
 
-        return symbols.curl_easy_perform(curl);
+        return symbols.curl_easy_perform(easy_handle);
     }, 'int', ['pointer'], symbols.abi)
 );
