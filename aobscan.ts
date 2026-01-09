@@ -16,19 +16,39 @@ export class addr_transform {
 
     va(rva: number) { return this.base().add(rva); };
 
-    rva(va: NativePointer) { return Number(va.sub(this.base()).and(0x7fffffff)); };
+    rva(va: NativePointer) { return va.sub(this.base()).toUInt32(); };
 
-    imm8(addr: NativePointer) { return addr.readU8(); };
+    toInt128(arr: ArrayBuffer | null) {
+        const view = new DataView(arr!);
+        // little-endian 64-bit
+        const lo = view.getBigUint64(0, true);
+        const hi = view.getBigUint64(8, true);
+        return (hi << 64n) | lo;
+    };
 
-    imm16(addr: NativePointer) { return addr.readU16(); };
+    imm8(addr: NativePointer, immOffset: number=0) { return addr.add(immOffset).readU8(); };
 
-    imm32(addr: NativePointer) { return addr.readU32(); };
+    imm16(addr: NativePointer, immOffset: number=0) { return addr.add(immOffset).readU16(); };
 
-    imm64(addr: NativePointer) { return addr.readU64(); }
+    imm32(addr: NativePointer, immOffset: number=0) { return addr.add(immOffset).readU32(); };
 
-    mem32(addr: NativePointer) { return this.rva(addr.add(addr.readS32()).add(4)); };
+    imm64(addr: NativePointer, immOffset: number=0) { return addr.add(immOffset).readU64(); };
 
-    /*branch*/call(addr: NativePointer) { return this.mem32(addr.add(1)); };
+    imm128(addr: NativePointer, immOffset: number=0) { return this.toInt128(addr.add(immOffset).readByteArray(16)); };
+
+    deref8(addr: NativePointer) { return addr.readPointer().readU8(); };
+
+    deref16(addr: NativePointer) { return addr.readPointer().readU16(); };
+
+    deref32(addr: NativePointer) { return addr.readPointer().readU32(); };
+
+    deref64(addr: NativePointer) { return addr.readPointer().readU64(); };
+
+    deref128(addr: NativePointer) { return this.toInt128(addr.readPointer().readByteArray(16)); };
+
+    /*branch*/
+    rel32(addr: NativePointer) { return this.rva(addr.add(addr.readS32()).add(4)); };
+    rel32CallTarget(addr: NativePointer) { return this.rel32(addr.add(1)); };
 
     aobscan(pattern: string) {
         const matches = [];
