@@ -1,5 +1,7 @@
 ///<reference path='C:/Users/r0th3r/OneDrive/Code/index.d.ts'/>
 
+import { addr_transform } from "./aobscan.js";
+
 
 function rndint(min, max) {
     min = Math.ceil(min);
