@@ -1,22 +1,42 @@
-///<reference path='C:\Users\r0th3r\OneDrive\Code\index.d.ts'/>
+///<reference path='C:/Users/r0th3r/OneDrive/Code/index.d.ts'/>
 
+// https://learn.microsoft.com/windows-hardware/drivers/debugger/general-environment-variables
+/*
+    $env:_NT_SYMBOL_PATH="$env:ProgramData\Dbg\sym"
+    frida -l .\curl-dumper.js -f $env:SYSTEMROOT\System32\curl.exe ipinfo.io
+*/
+
+
+// https://github.com/frida/frida-gum/blob/main/gum/backend-dbghelp/gumsymbolutil-dbghelp.c#L151
+DebugSymbol.load(Process.enumerateModules()[0].name);
 
 let symbols = {
-    ptr_curl_easy_setopt: Module.getExportByName(null, 'curl_easy_setopt'),
-    ptr_curl_easy_perform: Module.getExportByName(null, 'curl_easy_perform'),
-
     abi: 8 == Process.pointerSize ? 'default' : 'mscdecl',
+
+    mod_curl: Process.findModuleByName('libcurl.dll') || 
+        Process.findModuleByName('libcurl.so') || 
+        Process.findModuleByName('libcurl.dylib') ||
+        Process.mainModule,
+
+    ptr_curl_easy_setopt: () => {
+        return DebugSymbol.fromName('curl_easy_setopt')?.address ||
+            symbols.mod_curl.getExportByName('curl_easy_setopt');
+    },
+    ptr_curl_easy_perform: () => {
+        return DebugSymbol.fromName('curl_easy_perform')?.address ||
+            symbols.mod_curl.getExportByName('curl_easy_perform');
+    },
 
     /* https://curl.se/libcurl/c/curl_easy_setopt.html */
     curl_easy_setopt: function(curl, option, parameter) {
         return new NativeFunction(
-            symbols.ptr_curl_easy_setopt,
+            symbols.ptr_curl_easy_setopt(),
             'int', ['pointer', 'uint', 'pointer'], symbols.abi)(curl, option, parameter);
     },
     /* https://curl.se/libcurl/c/curl_easy_perform.html */
     curl_easy_perform: function(curl) {
         return new NativeFunction(
-            symbols.ptr_curl_easy_perform,
+            symbols.ptr_curl_easy_perform(),
             'int', ['pointer'], symbols.abi)(curl);
     }
 };
@@ -67,10 +87,8 @@ let dumper = new NativeCallback((handle, type, data, size, clientp) => {
 }, 'int', ['pointer', 'int', 'pointer', 'size_t', 'pointer'], symbols.abi);
 
 
-
-Interceptor.replace(symbols.ptr_curl_easy_perform, 
+Interceptor.replace(symbols.ptr_curl_easy_perform(),
     new NativeCallback((curl) => {
-
         /* Apr 15, 2002: https://github.com/curl/curl/blob/curl-7_9_6/include/curl/curl.h#L534 */
         let CURLOPT_VERBOSE = 41;
         let CURLOPT_DEBUGFUNCTION = 20000 + 94;
@@ -78,4 +96,5 @@ Interceptor.replace(symbols.ptr_curl_easy_perform,
         symbols.curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, ptr(dumper));
 
         return symbols.curl_easy_perform(curl);
-    }, 'int', ['pointer'], symbols.abi));
+    }, 'int', ['pointer'], symbols.abi)
+);
