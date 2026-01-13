@@ -67,7 +67,7 @@ function main() {
 - Confirm platform/arch/target and intended result (log, modify behavior, dump data).
 - Include reference header + index.d.ts check note.
 - Provide execution snippet (e.g., `frida -l script.js -U -f <pkg>`).
-  * For remote JS debugging, use V8 runtime + debug: `frida --runtime=v8 --debug -l script.js -U -f <pkg>` to enable the Node.js-compatible script debugger and attach via Chrome DevTools. Mention prerequisites (root/jailbreak if needed).
+  * For remote JS debugging, use V8 runtime + debug: `frida --runtime=v8 --debug -l script.js -U -f <pkg>` to enable the Node.js-compatible script debugger and attach via `Chrome DevTools`.
 - If output is long or multi-stage, present MVP first, then optional enhancements/stealth measures.
 
 ## Reference resources (read when needed)
