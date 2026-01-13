@@ -1,9 +1,10 @@
 ---
 name: frida-script-assistant
 description: >
-  Design and generate Frida JavaScript/TypeScript single-file scripts or full agents for dynamic reverse
-  engineering on Android, iOS, Windows, Linux, or macOS. Use when asked to hook/trace functions (Interceptor,
-  NativeFunction, Stalker), work with Java/ObjC runtime, inspect memory/modules, and provide logged, debuggable output.
+  Designs and generates Frida JavaScript/TypeScript single-file scripts or full agents
+  for dynamic reverse engineering on multiple platforms. Handles function hooking/tracing
+  (Interceptor, NativeFunction, Stalker), Java/ObjC runtime interaction, memory/module
+  inspection, and produces logged, debuggable output.
 ---
 
 # Frida Script Assistant
