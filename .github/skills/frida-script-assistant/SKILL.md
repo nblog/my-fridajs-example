@@ -14,8 +14,9 @@ description: >
 - Choose output form: single JS injector vs. TS agent (frida-agent-example style). Offer staged outputs: MVP (core hooks/logs), then enhanced (filters, arg/ret decoding, anti-detection).
 
 ## Index.d.ts guardrail
-- For scripts using Frida APIs, include `/// <reference path="index.d.ts" />` at the top.
-- Before emitting code, check whether `index.d.ts` exists in the workspace (prefer `rg --files -g "index.d.ts"`). If missing, suggest: `curl https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/frida-gum/index.d.ts?raw=true -o index.d.ts`.
+- For scripts using Frida APIs, include `///<reference path='index.d.ts'/>` at the top.
+- Before emitting code, check whether `index.d.ts` exists in the workspace (prefer `rg --files -g "index.d.ts"`).
+  * If missing, suggest: `curl https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/frida-gum/index.d.ts?raw=true -o index.d.ts`.
 
 ## Default logging & safety
 - Use concise, structured logs (e.g., `[frida] tag: detail`, JSON.stringify for complex data).
@@ -65,8 +66,10 @@ function main() {
 ## Delivery checklist
 - Confirm platform/arch/target and intended result (log, modify behavior, dump data).
 - Include reference header + index.d.ts check note.
-- Provide execution snippet (e.g., `frida -l script.js -U -f <pkg>`) and any prerequisites (root/jailbreak if needed).
+- Provide execution snippet (e.g., `frida -l script.js -U -f <pkg>`).
+  * For remote JS debugging, use V8 runtime + debug: `frida --runtime=v8 --debug -l script.js -U -f <pkg>` to enable the Node.js-compatible script debugger and attach via Chrome DevTools. Mention prerequisites (root/jailbreak if needed).
 - If output is long or multi-stage, present MVP first, then optional enhancements/stealth measures.
 
 ## Reference resources (read when needed)
+- Frida CLI tooling and workflows: https://github.com/frida/frida-tools (reference for `frida`, `frida-trace`, `frida-discover`, etc.).
 - Frida JS script unit test patterns: https://github.com/frida/frida-gum/blob/main/tests/gumjs/script.c (useful for assertion style, hooking behavior checks).
