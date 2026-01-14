@@ -15,8 +15,7 @@ let symbols = {
 
     mod_curl: Process.findModuleByName('libcurl.dll') || 
         Process.findModuleByName('libcurl.so') || 
-        Process.findModuleByName('libcurl.dylib') ||
-        Process.enumerateModules()[0],
+        Process.findModuleByName('libcurl.dylib'),
 
     ptr_curl_easy_setopt: () => {
         return DebugSymbol.fromName('curl_easy_setopt')?.address ||
@@ -97,3 +96,4 @@ Interceptor.replace(symbols.ptr_curl_easy_perform(),
         return symbols.curl_easy_perform(easy_handle);
     }, 'int', ['pointer'], symbols.abi)
 );
+
