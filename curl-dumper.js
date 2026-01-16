@@ -80,7 +80,10 @@ const my_trace = new NativeCallback((handle, type, data, size, clientp) => {
     }
 
     /* dump data */
-    console.log(`${hexdump(data, {length: size, ansi: true})}`);
+    const maxDumpSize = 128;
+    console.log(`${hexdump(data, {length: Math.min(size, maxDumpSize), ansi: true})}`);
+    if (size > maxDumpSize)
+        console.log(`... (${size - maxDumpSize} bytes omitted)`);
 
     return 0;
 }, 'int', ['pointer', 'int', 'pointer', 'size_t', 'pointer'], symbols.abi);
