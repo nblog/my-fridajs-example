@@ -88,15 +88,38 @@ const my_trace = new NativeCallback((handle, type, data, size, clientp) => {
     return 0;
 }, 'int', ['pointer', 'int', 'pointer', 'size_t', 'pointer'], symbols.abi);
 
+function installCurlTrace() {
+    Interceptor.replace(symbols.ptr_curl_easy_perform(),
+        new NativeCallback((easy_handle) => {
+            /* Apr 15, 2002: https://github.com/curl/curl/blob/curl-7_9_6/include/curl/curl.h#L534 */
+            let CURLOPT_VERBOSE = 41;
+            let CURLOPT_DEBUGFUNCTION = 20000 + 94;
+            symbols.curl_easy_setopt(easy_handle, CURLOPT_DEBUGFUNCTION, ptr(my_trace));
+            symbols.curl_easy_setopt(easy_handle, CURLOPT_VERBOSE, ptr(1));
 
-Interceptor.replace(symbols.ptr_curl_easy_perform(),
-    new NativeCallback((easy_handle) => {
-        /* Apr 15, 2002: https://github.com/curl/curl/blob/curl-7_9_6/include/curl/curl.h#L534 */
-        let CURLOPT_VERBOSE = 41;
-        let CURLOPT_DEBUGFUNCTION = 20000 + 94;
-        symbols.curl_easy_setopt(easy_handle, CURLOPT_DEBUGFUNCTION, ptr(my_trace));
-        symbols.curl_easy_setopt(easy_handle, CURLOPT_VERBOSE, ptr(1));
+            return symbols.curl_easy_perform(easy_handle);
+        }, 'int', ['pointer'], symbols.abi)
+    );
+}
 
-        return symbols.curl_easy_perform(easy_handle);
-    }, 'int', ['pointer'], symbols.abi)
-);
+/**
+ * Patches NtProtectVirtualMemory to be a no-op to prevent VMProtect from protecting its own memory regions.
+ * This bypasses memory protection checks on Windows systems using VMProtect obfuscation.
+**/
+new Promise(() => {
+    setTimeout(() => {
+        const patched = Process.getModuleByName('ntdll.dll').getExportByName('NtProtectVirtualMemory');
+        if (0xe9 == patched.readU8()) {
+            Memory.patchCode(patched, 64, code => {
+                let cw = new X86Writer(code, { pc: patched });
+                if (8 == Process.pointerSize)
+                    cw.putMovRegReg('r10', 'rcx');
+                cw.putMovRegU32('eax', 0x50);
+                cw.flush();
+            });
+        }
+        console.log(`Patched NtProtectVirtualMemory`);
+
+        installCurlTrace();
+    }, 100);
+});
