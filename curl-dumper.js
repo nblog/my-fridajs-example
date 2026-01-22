@@ -117,8 +117,8 @@ new Promise(() => {
                 cw.putMovRegU32('eax', 0x50);
                 cw.flush();
             });
+            console.log(`Patched NtProtectVirtualMemory`);
         }
-        console.log(`Patched NtProtectVirtualMemory`);
 
         installCurlTrace();
     }, 100);
