@@ -14,35 +14,86 @@ description: >
 - If requirements are fuzzy or multiple approaches exist, ask the minimum follow-up questions before coding. Propose MVP vs. enhanced/stealth plan when useful.
 - Choose output form: single JS injector vs. TS agent (frida-agent-example style). Offer staged outputs: MVP (core hooks/logs), then enhanced (filters, arg/ret decoding, anti-detection).
 
-## Index.d.ts guardrail
-- For scripts using Frida APIs, include `///<reference path='index.d.ts'/>` at the top.
-- Before emitting code, check whether `index.d.ts` exists in the workspace (prefer `rg --files -g "index.d.ts"`).
-  * If missing, suggest: `curl https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/frida-gum/index.d.ts?raw=true -o index.d.ts`.
+## Index.d.ts guardrail (JavaScript only)
+- When generating **JavaScript** scripts (not TypeScript agents), include `///<reference path='index.d.ts'/>` at the top for IDE type hints.
+- Before emitting JS code, check whether `index.d.ts` exists in the workspace (prefer `rg --files -g "index.d.ts"`).
+  * If missing, suggest: `curl https://github.com/DefinitelyTyped/DefinitelyTyped/raw/refs/heads/master/types/frida-gum/index.d.ts -o index.d.ts`.
 
 ## Default logging & safety
 - Use concise, structured logs (e.g., `[frida] tag: detail`, JSON.stringify for complex data).
 - Wrap risky sections in try/catch; fail loudly with context. Normalize addresses with `ptr(...)`.
 - Provide detach/cleanup guidance (e.g., Interceptor.detachAll()) when relevant.
 
+## Observability & backtrace logging
+- **Backtrace**: Use `Thread.backtrace(this.context, Backtracer.ACCURATE).map(DebugSymbol.fromAddress)` to capture native call stack; prefer `Backtracer.FUZZY` for stripped binaries.
+- **Address resolution**: Always resolve addresses to `module+offset` via `DebugSymbol.fromAddress(addr)` or manual calculation `addr.sub(module.base)` for reproducible offsets.
+- **Caller info**: Log `this.returnAddress` in `onEnter` to identify immediate caller; combine with backtrace for full context.
+- **Structured hook logs**: Include hook name, module, offset, thread ID (`Process.getCurrentThreadId()`), and timestamp for correlation.
+- **Java backtrace** (Android): Use `Java.use('android.util.Log').getStackTraceString(Java.use('java.lang.Exception').$new())` for Java-layer call chains.
+- **Hexdump for buffers**: Use `hexdump(ptr, {length: N, ansi: true})` to inspect memory regions with visual formatting.
+
 ## JS single-file scaffold (Example)
 ```js
 /// <reference path="index.d.ts" />
 
-// Adjust tag/process/module/function as needed.
-const log = (...args) => console.log(`[frida] ${args.join(' ')}`);
+// Structured logging with timestamp and thread ID
+const log = (tag, ...args) => {
+  const tid = Process.getCurrentThreadId();
+  console.log(`[frida][t:${tid}] ${tag}:`, ...args);
+};
+
+// Backtrace helper: returns formatted call stack with module+offset
+function bt(ctx, limit = 8) {
+  return Thread.backtrace(ctx, Backtracer.ACCURATE)
+    .slice(0, limit)
+    .map(addr => {
+      const sym = DebugSymbol.fromAddress(addr);
+      const mod = Process.findModuleByAddress(addr);
+      if (mod) {
+        const offset = addr.sub(mod.base);
+        return sym.name 
+          ? `${mod.name}!${sym.name}+0x${offset.toString(16)}`
+          : `${mod.name}+0x${offset.toString(16)}`;
+      }
+      return addr.toString();
+    });
+}
+
+// Address resolver: returns { module, offset, symbol }
+function addrInfo(addr) {
+  const sym = DebugSymbol.fromAddress(addr);
+  const mod = Process.findModuleByAddress(addr);
+  return {
+    module: mod?.name || 'unknown',
+    offset: mod ? addr.sub(mod.base).toString(16) : '0',
+    symbol: sym.name || null
+  };
+}
 
 function hookExport(moduleName, exportName) {
-  const libc = Process.getModuleByName(moduleName);
-  const addr = libc.getExportByName(exportName);
+  const mod = Process.getModuleByName(moduleName);
+  const addr = mod.getExportByName(exportName);
   if (!addr) { log('miss', moduleName, exportName); return; }
-  log('hook', moduleName, exportName, addr);
+  
+  const offset = addr.sub(mod.base);
+  log('hook', `${moduleName}!${exportName} @ ${addr} (${moduleName}+0x${offset.toString(16)})`);
+  
   Interceptor.attach(addr, {
     onEnter(args) {
+      this.caller = addrInfo(this.returnAddress);
       this.fileDescriptor = args[0].toInt32();
+      
+      log('enter', exportName, 
+          `fd=${this.fileDescriptor}`,
+          `caller=${this.caller.module}+0x${this.caller.offset}`);
+      
+      // Full backtrace (uncomment when needed):
+      // log('backtrace', exportName, '\n' + bt(this.context).join('\n  <- '));
     },
     onLeave(retval) {
-      if (retval.toInt32() > 0) {
-        /* do something with this.fileDescriptor */
+      const ret = retval.toInt32();
+      if (ret > 0) {
+        log('leave', exportName, `ret=${ret}`);
       }
     }
   });
