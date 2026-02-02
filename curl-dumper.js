@@ -114,7 +114,7 @@ new Promise(() => {
                 let cw = new X86Writer(code, { pc: patched });
                 if (8 == Process.pointerSize)
                     cw.putMovRegReg('r10', 'rcx');
-                cw.putMovRegU32('eax', 0x50);
+                cw.putMovRegU32('eax', 0x50); // NtProtectVirtualMemory Index
                 cw.flush();
             });
             console.log(`Patched NtProtectVirtualMemory`);
