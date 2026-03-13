@@ -114,7 +114,7 @@ new Promise(() => {
                 let cw = new X86Writer(code, { pc: patched });
                 if (8 == Process.pointerSize)
                     cw.putMovRegReg('r10', 'rcx');
-                cw.putMovRegU32('eax', 0x50); // NtProtectVirtualMemory Index
+                cw.putMovRegU32('eax', 0x50); // NtProtectVirtualMemory (windows 10 1507+)
                 cw.flush();
             });
             console.log(`Patched NtProtectVirtualMemory`);
@@ -123,3 +123,4 @@ new Promise(() => {
         installCurlTrace();
     }, 100);
 });
+
