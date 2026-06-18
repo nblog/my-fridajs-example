@@ -71,13 +71,19 @@ Interceptor.replace(createProcessInternalW, new NativeCallback(function (
     if (result) {
         // https://learn.microsoft.com/windows/win32/api/processthreadsapi/ns-processthreadsapi-process_information
         const pi = lpProcessInformation;
+        const processHandle = pi.readPointer();
         const processId = pi.add(Process.pointerSize * 2).readU32();
         console.log(`    Process created successfully with PID: ${processId}`);
-        
-        // Launch x64dbg to catch the newly created process in a suspended state
-        rpc.exports.rundbg(rpc.exports.x64dbgdir(), "-pid " + processId);
+
+        // Determine child process architecture by reading its PE header
+        const pe32 = isProcessPE32(processHandle);
+        console.log(`    Architecture: ${pe32 ? 'i386 (PE32)' : 'x64 (PE64)'}`);
+
+        // Launch the matching debugger to catch the newly created suspended process
+        rpc.exports.rundbg(rpc.exports.x64dbgdir(), "-pid " + processId, pe32);
     } else {
-        const getLastError = new NativeFunction(kernel32.getExportByName('GetLastError'), 'uint32', []);
+        const getLastError = new NativeFunction(
+            Process.getModuleByName('kernel32.dll').getExportByName('GetLastError'), 'uint32', []);
         const errorCode = getLastError();
         console.log(`    Failed to create process. GetLastError: ${errorCode}`);
     }
@@ -103,8 +109,8 @@ rpc.exports = {
     x64dbgdir() {
         return 'C:\\Users\\r0th3r\\Downloads\\Tools\\x64dbg\\release\\x64\\';
     },
-    rundbg(x64dbgdir, commandline) {
-        const exePath = x64dbgdir + 'x64dbg.exe';
+    rundbg(x64dbgdir, commandline, pe32=false) {
+        const exePath = x64dbgdir + (pe32 ? 'x32dbg.exe' : 'x64dbg.exe');
         console.log(`[*] rundbg: launching ${exePath}`);
 
         // Allocate UTF-16 command line (writable buffer required by CreateProcessInternalW)
@@ -140,8 +146,68 @@ rpc.exports = {
         if (result) {
             console.log(`[+] x64dbg launched successfully!`);
         } else {
-            const getLastError = new NativeFunction(kernel32.getExportByName('GetLastError'), 'uint32', []);
+            const getLastError = new NativeFunction(
+                Process.getModuleByName('kernel32.dll').getExportByName('GetLastError'), 'uint32', []);
             console.log(`[-] Failed to launch x64dbg. GetLastError: ${getLastError()}`);
         }
     }
 };
+
+
+/**
+ * Determine if a child process is PE32 (i386) by reading its PE header in memory.
+ * Uses GetModuleInformation(hProcess, NULL) to get the image base,
+ * then ReadProcessMemory to parse DOS → PE → IMAGE_FILE_HEADER.Machine.
+ *
+ * @param {NativePointer} processHandle - PROCESS_INFORMATION.hProcess
+ * @returns {boolean} true if IMAGE_FILE_MACHINE_I386 (0x014c), false otherwise (PE64)
+ */
+function isProcessPE32(processHandle) {
+    const IMAGE_FILE_MACHINE_I386 = 0x014c;
+
+    // GetModuleInformation(processHandle, NULL, &modInfo, sizeof(MODULEINFO))
+    const psapi = Process.getModuleByName('psapi.dll');
+    const getModuleInformation = new NativeFunction(
+        psapi.getExportByName('GetModuleInformation'),
+        'bool', ['pointer', 'pointer', 'pointer', 'uint32']
+    );
+
+    // MODULEINFO: { LPVOID lpBaseOfDll; DWORD SizeOfImage; LPVOID EntryPoint; }
+    const MODULEINFO_SIZE = Process.pointerSize * 2 + 4;
+    const modInfo = Memory.alloc(MODULEINFO_SIZE);
+
+    if (!getModuleInformation(processHandle, NULL, modInfo, MODULEINFO_SIZE)) {
+        console.log('    [!] GetModuleInformation failed');
+        return false;
+    }
+
+    const imageBase = modInfo.readPointer();
+    console.log(`    Image base: ${imageBase}`);
+
+    // ReadProcessMemory(hProcess, lpBaseAddress, lpBuffer, nSize, lpNumberOfBytesRead)
+    const readProcessMemory = new NativeFunction(
+        Process.getModuleByName('kernel32.dll').getExportByName('ReadProcessMemory'),
+        'bool', ['pointer', 'pointer', 'pointer', 'pointer', 'pointer']
+    );
+    const bytesRead = Memory.alloc(Process.pointerSize);
+
+    // 1) Read IMAGE_DOS_HEADER.e_lfanew at offset 0x3C (4 bytes)
+    const e_lfanewBuf = Memory.alloc(4);
+    if (!readProcessMemory(processHandle, imageBase.add(0x3C), e_lfanewBuf, ptr(4), bytesRead)) {
+        console.log('    [!] ReadProcessMemory failed reading e_lfanew');
+        return false;
+    }
+    const e_lfanew = e_lfanewBuf.readU32();
+
+    // 2) Read IMAGE_FILE_HEADER.Machine at PE signature + 4
+    //    PE signature "PE\0\0" is 4 bytes, Machine is the next 2 bytes
+    const machineBuf = Memory.alloc(2);
+    if (!readProcessMemory(processHandle, imageBase.add(e_lfanew + 4), machineBuf, ptr(2), bytesRead)) {
+        console.log('    [!] ReadProcessMemory failed reading Machine');
+        return false;
+    }
+    const machine = machineBuf.readU16();
+    console.log(`    PE Machine: 0x${machine.toString(16)}`);
+
+    return machine === IMAGE_FILE_MACHINE_I386;
+}
