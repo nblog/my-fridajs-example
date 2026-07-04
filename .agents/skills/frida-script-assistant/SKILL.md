@@ -14,6 +14,27 @@ description: >
 - If requirements are fuzzy or multiple approaches exist, ask the minimum follow-up questions before coding. Propose MVP vs. enhanced/stealth plan when useful.
 - Choose output form: single JS injector vs. TS agent (frida-agent-example style). Offer staged outputs: MVP (core hooks/logs), then enhanced (filters, arg/ret decoding, anti-detection).
 
+## JavaScript purity rule (CRITICAL — .js files only)
+When the output file extension is `.js` (not `.ts`), the generated code **MUST be pure JavaScript** — Frida's JS runtime (QuickJS/V8) cannot parse TypeScript syntax and will fail with cryptic parse errors like `expecting ','`.
+
+**NEVER emit any of the following in `.js` output:**
+- Parameter type annotations: `(arg: string)`, `(ctx: CpuContext)`
+- Return type annotations: `(): void`, `(): string[]`
+- Access modifiers: `private`, `public`, `protected`, `readonly`
+- Type assertions / casts: `as NativePointer`, `<NativePointer>value`
+- Interfaces / type aliases: `interface Foo {}`, `type Bar = ...`
+- Generic type parameters: `class Foo<T>`, `function bar<T>()`
+- Non-null assertions: `value!`
+- Enum declarations: `enum Direction { ... }`
+
+**Use instead:**
+- Plain parameters: `(arg)`, `(ctx, limit)`
+- No return types: `function foo() {`
+- Underscore-prefixed "private" fields: `this._ptr = ptr` (not `private ptr`)
+- JSDoc comments for type hints if needed: `/** @param {NativePointer} ptr */`
+
+**Self-check before emitting:** scan the generated code for `: string`, `: number`, `: void`, `: boolean`, `: any`, `: NativePointer`, `: CpuContext`, `private `, `public ` — if any match outside of comments, the file will fail at runtime.
+
 ## Index.d.ts guardrail (JavaScript only)
 - When generating **JavaScript** scripts (not TypeScript agents), include `///<reference path='index.d.ts'/>` at the top for IDE type hints.
 - Before emitting JS code, check whether `index.d.ts` exists in the workspace (prefer `rg --files -g "index.d.ts"`).
