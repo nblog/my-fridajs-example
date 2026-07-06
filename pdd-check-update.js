@@ -2,6 +2,7 @@
 
 /**
  * PDD Workbench - Skip "check update" via ClientFunctionMgr::getFuncEnable hook
+ *                 + Block PDDUpdate.exe creation via CreateProcessInternalW hook
  *
  * Usage:
  *   uvx --from frida-tools frida --help
@@ -20,7 +21,11 @@ const CONFIG = {
         '3.6.7.6':  0x4C0FF0,
     },
     activeVersion: '3.6.7.6',
-    skipKeyword: 'func_enable_start_check_update_276',
+    skipKeywords: [
+        'func_enable_start_check_update_276',
+        'func_enable_force_auto_update_293',
+        // 'func_enable_ignore_update_277',
+    ],
 };
 
 // ---------------------------------------------------------------------------
@@ -99,6 +104,90 @@ function bt(ctx, limit) {
 }
 
 // ---------------------------------------------------------------------------
+// Hook: CreateProcessInternalW
+// ---------------------------------------------------------------------------
+function hookCreateProcess() {
+    const kernel32 = Process.getModuleByName('kernelbase.dll');
+    const createProcessInternalW = kernel32.getExportByName('CreateProcessInternalW');
+
+    const originalCreateProcessInternalW = new NativeFunction(
+        createProcessInternalW,
+        'bool',
+        [
+            'pointer',  // IN  HANDLE hUserToken
+            'pointer',  // IN  LPCWSTR lpApplicationName
+            'pointer',  // IN  LPWSTR lpCommandLine
+            'pointer',  // IN  LPSECURITY_ATTRIBUTES lpProcessAttributes
+            'pointer',  // IN  LPSECURITY_ATTRIBUTES lpThreadAttributes
+            'bool',     // IN  BOOL bInheritHandles
+            'uint32',   // IN  DWORD dwCreationFlags
+            'pointer',  // IN  LPVOID lpEnvironment
+            'pointer',  // IN  LPCWSTR lpCurrentDirectory
+            'pointer',  // IN  LPSTARTUPINFOW lpStartupInfo
+            'pointer',  // IN  LPPROCESS_INFORMATION lpProcessInformation
+            'pointer'   // OUT PHANDLE hRestrictedUserToken
+        ]
+    );
+
+    Interceptor.replace(createProcessInternalW, new NativeCallback(function (
+        hUserToken,
+        lpApplicationName,
+        lpCommandLine,
+        lpProcessAttributes,
+        lpThreadAttributes,
+        bInheritHandles,
+        dwCreationFlags,
+        lpEnvironment,
+        lpCurrentDirectory,
+        lpStartupInfo,
+        lpProcessInformation,
+        hRestrictedUserToken
+    ) {
+        const appName = lpApplicationName.isNull() ? '' : lpApplicationName.readUtf16String();
+        const cmdLine = lpCommandLine.isNull() ? '' : lpCommandLine.readUtf16String();
+
+        // Check if the target is PDDUpdate.exe (case-insensitive endsWith)
+        const target = appName || cmdLine;
+        if (target.toLowerCase().endsWith('pddupdate.exe')) {
+            log('block', `CreateProcessInternalW blocked: PDDUpdate.exe detected`);
+            log('block', `  lpApplicationName: ${appName || 'NULL'}`);
+            log('block', `  lpCommandLine: ${cmdLine || 'NULL'}`);
+            return 1; // return TRUE (success) without actually creating the process
+        }
+
+        return originalCreateProcessInternalW(
+            hUserToken,
+            lpApplicationName,
+            lpCommandLine,
+            lpProcessAttributes,
+            lpThreadAttributes,
+            bInheritHandles,
+            dwCreationFlags,
+            lpEnvironment,
+            lpCurrentDirectory,
+            lpStartupInfo,
+            lpProcessInformation,
+            hRestrictedUserToken
+        );
+    }, 'bool', [
+        'pointer',
+        'pointer',
+        'pointer',
+        'pointer',
+        'pointer',
+        'bool',
+        'uint32',
+        'pointer',
+        'pointer',
+        'pointer',
+        'pointer',
+        'pointer'
+    ]));
+
+    log('hook', 'CreateProcessInternalW hook installed (blocking PDDUpdate.exe)');
+}
+
+// ---------------------------------------------------------------------------
 // Hook: ClientFunctionMgr::getFuncEnable
 // ---------------------------------------------------------------------------
 function hookGetFuncEnable() {
@@ -130,9 +219,10 @@ function hookGetFuncEnable() {
             // // Dump raw memory of arg1 for debugging
             // log('dump', 'arg1 raw', '\n' + hexdump(args[1], { length: 32, ansi: true }));
 
-            if (strValue.includes(CONFIG.skipKeyword)) {
+            const matched = CONFIG.skipKeywords.find(function (kw) { return strValue.includes(kw); });
+            if (matched) {
                 this.shouldSkip = true;
-                log('skip', `Matched "${CONFIG.skipKeyword}" → will force retval=0`);
+                log('skip', `Matched "${matched}" → will force retval=0`);
             }
         },
         onLeave(retval) {
@@ -171,8 +261,9 @@ new Promise(function () {
                     log('vmp-bypass', 'NtProtectVirtualMemory not hooked (no JMP stub), skipping patch');
                 }
             })();
+            hookCreateProcess();
             hookGetFuncEnable();
-            log('init', `Hook installed (version=${CONFIG.activeVersion})`);
+            log('init', `Hooks installed (version=${CONFIG.activeVersion})`);
         } catch (e) {
             log('error', `Init failed: ${e}`);
         }
