@@ -104,6 +104,152 @@ function bt(ctx, limit) {
 }
 
 // ---------------------------------------------------------------------------
+// Win32 API wrappers (user32.dll)
+// ---------------------------------------------------------------------------
+const GetWindowTextW = new NativeFunction(
+    Process.getModuleByName('user32.dll').getExportByName('GetWindowTextW'),
+    'int', ['pointer', 'pointer', 'int']
+);
+
+const GetClassNameW = new NativeFunction(
+    Process.getModuleByName('user32.dll').getExportByName('GetClassNameW'),
+    'int', ['pointer', 'pointer', 'int']
+);
+
+const GetParent = new NativeFunction(
+    Process.getModuleByName('user32.dll').getExportByName('GetParent'),
+    'pointer', ['pointer']
+);
+
+const GetWindowRect = new NativeFunction(
+    Process.getModuleByName('user32.dll').getExportByName('GetWindowRect'),
+    'bool', ['pointer', 'pointer']
+);
+
+const DestroyWindow = new NativeFunction(
+    Process.getModuleByName('user32.dll').getExportByName('DestroyWindow'),
+    'bool', ['pointer']
+);
+
+// ---------------------------------------------------------------------------
+// WindowInfo - Win32 window information wrapper
+// ---------------------------------------------------------------------------
+/**
+ * Encapsulates window properties: title, class name, parent handle, size.
+ * Lazily queries each property on first access.
+ */
+class WindowInfo {
+    constructor(hwnd) {
+        this._hwnd = hwnd;
+        this._title = null;
+        this._className = null;
+        this._parent = null;
+        this._width = null;
+        this._height = null;
+    }
+
+    get handle() {
+        return this._hwnd;
+    }
+
+    get title() {
+        if (this._title === null) {
+            const buf = Memory.alloc(512 * 2);
+            GetWindowTextW(this._hwnd, buf, 512);
+            this._title = buf.readUtf16String() || '';
+        }
+        return this._title;
+    }
+
+    get className() {
+        if (this._className === null) {
+            const buf = Memory.alloc(256 * 2);
+            GetClassNameW(this._hwnd, buf, 256);
+            this._className = buf.readUtf16String() || '';
+        }
+        return this._className;
+    }
+
+    get parent() {
+        if (this._parent === null) {
+            this._parent = GetParent(this._hwnd);
+        }
+        return this._parent;
+    }
+
+    get width() {
+        if (this._width === null) {
+            this._queryRect();
+        }
+        return this._width;
+    }
+
+    get height() {
+        if (this._height === null) {
+            this._queryRect();
+        }
+        return this._height;
+    }
+
+    _queryRect() {
+        const rect = Memory.alloc(16); // RECT: left(4), top(4), right(4), bottom(4)
+        GetWindowRect(this._hwnd, rect);
+        const left   = rect.readS32();
+        const top    = rect.add(4).readS32();
+        const right  = rect.add(8).readS32();
+        const bottom = rect.add(12).readS32();
+        this._width  = right - left;
+        this._height = bottom - top;
+    }
+
+    toString() {
+        return `WindowInfo(hwnd=0x${this._hwnd.toString(16)}, `
+            + `title="${this.title}", `
+            + `class="${this.className}", `
+            + `parent=0x${this.parent.toString(16)}, `
+            + `size=${this.width}x${this.height})`;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Hook: CreateWindowExW
+// ---------------------------------------------------------------------------
+function hookCreateWindowExW() {
+    const createWindowExW = Process.getModuleByName('user32.dll').getExportByName('CreateWindowExW');
+
+    function isHex32(str) {
+        return str.length === 32 && /^[0-9a-z]{32}$/.test(str);
+    }
+
+    Interceptor.attach(createWindowExW, {
+        onEnter(args) {
+            // Save parameters for onLeave inspection
+            this.lpClassName = args[1];
+            this.lpWindowName = args[2];
+        },
+        onLeave(retval) {
+            const hWnd = retval;
+            if (hWnd.isNull()) return; // creation failed, nothing to do
+
+            try {
+                const wi = new WindowInfo(hWnd);
+
+                // Check if the window matches the criteria: title and class name are 32-character hex strings, and size is 476x468
+                if (isHex32(wi.title) && isHex32(wi.className) &&
+                    wi.width === 476 && wi.height === 468) {
+                    log('destroy', `CreateWindowExW → destroying matched window: ${wi}`);
+                    DestroyWindow(hWnd);
+                }
+            } catch (e) {
+                // Silently ignore — don't break normal window creation
+            }
+        }
+    });
+
+    log('hook', 'CreateWindowExW hook installed (destroying 476x468 hex-titled windows after creation)');
+}
+
+// ---------------------------------------------------------------------------
 // Hook: CreateProcessInternalW
 // ---------------------------------------------------------------------------
 function hookCreateProcess() {
@@ -262,7 +408,8 @@ new Promise(function () {
                 }
             })();
             hookCreateProcess();
-            hookGetFuncEnable();
+            hookCreateWindowExW();
+            // hookGetFuncEnable();
             log('init', `Hooks installed (version=${CONFIG.activeVersion})`);
         } catch (e) {
             log('error', `Init failed: ${e}`);
