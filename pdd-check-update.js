@@ -24,6 +24,13 @@ const CONFIG = {
     skipKeywords: [
         'func_enable_start_check_update_276',
         'func_enable_force_auto_update_293',
+        'func_enable_silent_update_287',
+        'func_enable_main_exec_update_download_294',
+        'func_enable_patch_update_349',
+        'func_enable_get_leo_update_27517',
+        'func_enable_hot_update_check_plugin',
+        'func_enable_config_rollback_update_339',
+        'enable_func_anti_update_limit_time',
         // 'func_enable_ignore_update_277',
     ],
 };
@@ -33,7 +40,8 @@ const CONFIG = {
 // ---------------------------------------------------------------------------
 const log = function (tag, ...args) {
     const tid = Process.getCurrentThreadId();
-    console.log(`[frida][t:${tid}] ${tag}:`, ...args);
+    const ts = new Date().toISOString().slice(11, 19); // HH:mm:ss
+    console.log(`[frida][${ts}] ${tag}:`, ...args);
 };
 
 // ---------------------------------------------------------------------------
@@ -292,10 +300,12 @@ function hookCreateProcess() {
         const appName = lpApplicationName.isNull() ? '' : lpApplicationName.readUtf16String();
         const cmdLine = lpCommandLine.isNull() ? '' : lpCommandLine.readUtf16String();
 
-        // Check if the target is PDDUpdate.exe (case-insensitive endsWith)
+        // Check if the target is PDDUpdate.exe or FullUpdate_<version>_.exe
         const target = appName || cmdLine;
-        if (target.toLowerCase().endsWith('pddupdate.exe')) {
-            log('block', `CreateProcessInternalW blocked: PDDUpdate.exe detected`);
+        const isPddUpdate = target.toLowerCase().endsWith('pddupdate.exe');
+        const isFullUpdate = /FullUpdate_[\d.]+_\.exe/i.test(target);
+        if (isPddUpdate || isFullUpdate) {
+            log('block', `CreateProcessInternalW blocked: ${isPddUpdate ? 'PDDUpdate' : 'FullUpdate'} detected`);
             log('block', `  lpApplicationName: ${appName || 'NULL'}`);
             log('block', `  lpCommandLine: ${cmdLine || 'NULL'}`);
             return 1; // return TRUE (success) without actually creating the process
@@ -407,9 +417,9 @@ new Promise(function () {
                     log('vmp-bypass', 'NtProtectVirtualMemory not hooked (no JMP stub), skipping patch');
                 }
             })();
-            hookCreateProcess();
             hookCreateWindowExW();
-            // hookGetFuncEnable();
+            hookCreateProcess();
+            hookGetFuncEnable();
             log('init', `Hooks installed (version=${CONFIG.activeVersion})`);
         } catch (e) {
             log('error', `Init failed: ${e}`);
