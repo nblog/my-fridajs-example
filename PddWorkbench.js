@@ -1,7 +1,7 @@
 ///<reference path='C:/Users/r0th3r/OneDrive/Code/index.d.ts'/>
 
 /**
- * PDD Workbench - Skip "check update" via ClientFunctionMgr::getFuncEnable hook
+ * PDD Workbench - Skip "check update" via
  *                 + Block PDDUpdate.exe creation via CreateProcessInternalW hook
  *
  * Usage:
@@ -16,23 +16,7 @@
 // ---------------------------------------------------------------------------
 const CONFIG = {
     moduleName: 'PddWorkbench.exe',
-    versions: {
-        '3.6.0.14': 0x49C3C0,
-        '3.6.7.6':  0x4C0FF0,
-    },
     activeVersion: '3.6.7.6',
-    skipKeywords: [
-        'func_enable_start_check_update_276',
-        'func_enable_force_auto_update_293',
-        'func_enable_silent_update_287',
-        'func_enable_main_exec_update_download_294',
-        'func_enable_patch_update_349',
-        'func_enable_get_leo_update_27517',
-        'func_enable_hot_update_check_plugin',
-        'func_enable_config_rollback_update_339',
-        'enable_func_anti_update_limit_time',
-        // 'func_enable_ignore_update_277',
-    ],
 };
 
 // ---------------------------------------------------------------------------
@@ -379,18 +363,25 @@ function hookCreateProcess() {
 // ---------------------------------------------------------------------------
 function hookGetFuncEnable() {
     const mod = Process.getModuleByName(CONFIG.moduleName);
-    const offset = CONFIG.versions[CONFIG.activeVersion];
-    if (!offset) {
-        log('error', `Unknown version: ${CONFIG.activeVersion}`);
-        return;
-    }
+    // 3.6.0.14: 0x49C3C0
+    // 3.6.7.6:  0x4C0FF0
+    const targetAddr = mod.base.add(0x4C0FF0);
 
-    const targetAddr = mod.base.add(offset);
-    log('hook', `ClientFunctionMgr::getFuncEnable @ ${targetAddr} (${CONFIG.moduleName}+0x${offset.toString(16)})`);
+    const skipKeywords = [
+        'func_enable_start_check_update_276',
+        'func_enable_force_auto_update_293',
+        'func_enable_silent_update_287',
+        'func_enable_main_exec_update_download_294',
+        'func_enable_patch_update_349',
+        'func_enable_get_leo_update_27517',
+        'func_enable_hot_update_check_plugin',
+        'func_enable_config_rollback_update_339',
+        'enable_func_anti_update_limit_time',
+        // 'func_enable_ignore_update_277',
+    ];
 
     Interceptor.attach(targetAddr, {
         onEnter(args) {
-            // args[1] is the second parameter — likely a std::string*
             const stdStr = new StdString(args[1]);
             const strValue = stdStr.read();
 
@@ -399,14 +390,12 @@ function hookGetFuncEnable() {
 
             // log('enter', 'getFuncEnable',
             //     `arg1="${strValue}"`,
-            //     // `size=${stdStr.size}`,
-            //     // `sso=${stdStr.isSSO}`,
             //     `caller=${DebugSymbol.fromAddress(this.returnAddress)}`);
 
             // // Dump raw memory of arg1 for debugging
             // log('dump', 'arg1 raw', '\n' + hexdump(args[1], { length: 32, ansi: true }));
 
-            const matched = CONFIG.skipKeywords.find(function (kw) { return strValue.includes(kw); });
+            const matched = skipKeywords.find(function (kw) { return strValue.includes(kw); });
             if (matched) {
                 this.shouldSkip = true;
                 log('skip', `Matched "${matched}" → will force retval=0`);
@@ -421,6 +410,30 @@ function hookGetFuncEnable() {
                     `key="${this.strValue}"`);
             }
         }
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Hook: MallCSID
+// ---------------------------------------------------------------------------
+function hookMallCSID() {
+    const mod = Process.getModuleByName(CONFIG.moduleName);
+    // 3.6.7.6:  0x1DD6B9
+    const targetAddr = mod.base.add(0x1DD6B9);
+
+    Interceptor.attach(targetAddr, {
+        onEnter(args) {
+            try {
+                const stdStr = new StdString((this.context).rax);
+                const value = stdStr.read();
+                if (value) {
+                    log('mallcsid', `MallCSID = "${value}"`);
+                }
+            } catch (e) {
+                log('mallcsid', `Failed to read std::string at ${strPtr}: ${e}`);
+            }
+        },
+        onLeave(retval) {}
     });
 }
 
@@ -451,6 +464,7 @@ new Promise(function () {
             hookCreateWindowExW();
             hookCreateProcess();
             hookGetFuncEnable();
+            hookMallCSID();
             log('init', `Hooks installed (version=${CONFIG.activeVersion})`);
         } catch (e) {
             log('error', `Init failed: ${e}`);
