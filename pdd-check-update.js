@@ -300,9 +300,40 @@ function hookCreateProcess() {
         const appName = lpApplicationName.isNull() ? '' : lpApplicationName.readUtf16String();
         const cmdLine = lpCommandLine.isNull() ? '' : lpCommandLine.readUtf16String();
 
-        // Check if the target is PDDUpdate.exe or FullUpdate_<version>_.exe
         const target = appName || cmdLine;
-        const isPddUpdate = target.toLowerCase().endsWith('pddupdate.exe');
+
+        /*
+        // Log pddwebworkbench.exe command line and inject remote debugging parameters
+        if (target.toLowerCase().includes('pddwebworkbench.exe')) {
+            log('observe', `CreateProcessInternalW → PddWebWorkbench detected`);
+            log('observe', `  lpApplicationName: ${appName || 'NULL'}`);
+            log('observe', `  lpCommandLine: ${cmdLine || 'NULL'}`);
+            
+            // Append remote debugging parameters for CDP
+            const newCmdLine = cmdLine + ' --remote-debugging-port=9222 --remote-allow-origins=*';
+            const newCmdLinePtr = Memory.allocUtf16String(newCmdLine);
+            log('observe', `  Modified lpCommandLine: ${newCmdLine}`);
+            
+            // Call original with modified command line
+            return originalCreateProcessInternalW(
+                hUserToken,
+                lpApplicationName,
+                newCmdLinePtr,
+                lpProcessAttributes,
+                lpThreadAttributes,
+                bInheritHandles,
+                dwCreationFlags,
+                lpEnvironment,
+                lpCurrentDirectory,
+                lpStartupInfo,
+                lpProcessInformation,
+                hRestrictedUserToken
+            );
+        }
+        */
+
+        // Check if the target is PDDUpdate.exe or FullUpdate_<version>_.exe
+        const isPddUpdate = target.toLowerCase().includes('pddupdate.exe');
         const isFullUpdate = /FullUpdate_[\d.]+_\.exe/i.test(target);
         if (isPddUpdate || isFullUpdate) {
             log('block', `CreateProcessInternalW blocked: ${isPddUpdate ? 'PDDUpdate' : 'FullUpdate'} detected`);
