@@ -9,6 +9,11 @@
  *   uvx --from frida-tools frida -l pdd-check-update.js -f "path\to\PddWorkbench.exe"
  *   # or attach to running process:
  *   uvx --from frida-tools frida -l pdd-check-update.js -n PddWorkbench.exe
+ *
+ * Attach mode notes:
+ *   PDDProtect.dll hooks LdrLoadDll to detect and block frida-agent.dll.
+ *   When attaching (not spawning), we must patch LdrLoadDll early to bypass
+ *   this anti-frida check before the agent DLL is loaded.
  */
 
 // ---------------------------------------------------------------------------
@@ -438,6 +443,30 @@ function hookMallCSID() {
 }
 
 // ---------------------------------------------------------------------------
+// Patch: LdrLoadDll (anti-frida bypass for attach mode)
+// ---------------------------------------------------------------------------
+/**
+ * PDDProtect.dll hooks ntdll!LdrLoadDll to inspect DLL names being loaded
+ * and blocks frida-agent.dll (and related Frida runtime DLLs).
+ *
+ * When spawning (-f), Frida injects before PDDProtect initializes, so this
+ * is not an issue. But when attaching (-n / -p), PDDProtect is already
+ * active and will reject the agent DLL load.
+ *
+ * Strategy: Hook LdrLoadDll and filter out the anti-frida check so that
+ * frida-agent.dll can be loaded without being blocked.
+ */
+function hookLdrLoadDll() {
+    // TODO: implement LdrLoadDll patch for attach mode
+    //   1. Get ntdll!LdrLoadDll address
+    //   2. Interceptor.attach onEnter: read DllPath / DllName (UNICODE_STRING)
+    //   3. If the DLL name matches frida-agent*.dll, skip PDDProtect's filter
+    //   4. Alternatively: replace LdrLoadDll with a trampoline that calls
+    //      the original ntdll implementation directly, bypassing the hook
+    log('patch', 'LdrLoadDll patch placeholder (attach mode anti-frida bypass)');
+}
+
+// ---------------------------------------------------------------------------
 // Entry point — delayed to let VMP finish its init
 // ---------------------------------------------------------------------------
 new Promise(function () {
@@ -461,6 +490,7 @@ new Promise(function () {
                     log('vmp-bypass', 'NtProtectVirtualMemory not hooked (no JMP stub), skipping patch');
                 }
             })();
+            hookLdrLoadDll();
             hookCreateWindowExW();
             hookCreateProcess();
             hookGetFuncEnable();
