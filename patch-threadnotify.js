@@ -4,15 +4,22 @@
 function GetThreadFunctionFromThreadId(threadId=0, func=function(hThread=ptr(-2)){})
 {
     const CloseHandle = new NativeFunction(
-        Module.getExportByName('kernel32', 'CloseHandle'),
+        Process.getModuleByName('kernel32').getExportByName('CloseHandle'),
         'uint32', ['pointer']);
     const OpenThread = new NativeFunction(
-        Module.getExportByName('kernel32', 'OpenThread'),
+        Process.getModuleByName('kernel32').getExportByName('OpenThread'),
         'pointer', ['uint32', 'bool', 'uint32']);
 
     let threadAny;
 
-    let hThread = OpenThread(0x001F03FF /* THREAD_ALL_ACCESS */, 0, threadId);
+    /* Minimal rights required by ExecInAnyThread():
+     *   THREAD_SUSPEND_RESUME   (0x0002) - SuspendThread / ResumeThread
+     *   THREAD_GET_CONTEXT      (0x0008) - GetThreadContext
+     *   THREAD_SET_CONTEXT      (0x0010) - SetThreadContext
+     *   THREAD_QUERY_INFORMATION(0x0040) - GetThreadId / NtQueryInformationThread
+     */
+    const thread_access = 0x0002 | 0x0008 | 0x0010 | 0x0040;
+    let hThread = OpenThread(thread_access, 0, threadId);
 
     if (hThread.equals(NULL)) return threadAny;
 
@@ -25,13 +32,13 @@ function GetThreadFunctionFromThreadId(threadId=0, func=function(hThread=ptr(-2)
 function GetCurrentThread()
 {
     return new NativeFunction(
-        Module.getExportByName('kernel32', 'GetCurrentThread'),
+        Process.getModuleByName('kernel32').getExportByName('GetCurrentThread'),
         'pointer', [])();
 }
 function GetThreadName(threadHandle=NULL)
 {
     const NtQueryInformationThread = new NativeFunction(
-        Module.getExportByName('ntdll', 'NtQueryInformationThread'),
+        Process.getModuleByName('ntdll').getExportByName('NtQueryInformationThread'),
         'uint32', ['pointer', 'uint32', 'pointer', 'uint32', 'pointer']);
 
     if (NULL === threadHandle)
@@ -54,7 +61,7 @@ function GetThreadName(threadHandle=NULL)
 function GetThreadStartAddress(threadHandle=NULL)
 {
     const NtQueryInformationThread = new NativeFunction(
-        Module.getExportByName('ntdll', 'NtQueryInformationThread'),
+        Process.getModuleByName('ntdll').getExportByName('NtQueryInformationThread'),
         'uint32', ['pointer', 'uint32', 'pointer', 'uint32', 'pointer']);
 
     if (NULL === threadHandle)
@@ -70,46 +77,46 @@ function GetThreadStartAddress(threadHandle=NULL)
 function ExecInAnyThread(threadHandle=NULL, func=function(parameter=NULL){}, parameter=NULL)
 {
     const GetLastError = new NativeFunction(
-        Module.getExportByName('kernel32', 'GetLastError'),
+        Process.getModuleByName('kernel32').getExportByName('GetLastError'),
         'uint32', []);
     const GetThreadContext = new NativeFunction(
-        Module.getExportByName('kernel32', 'GetThreadContext'),
+        Process.getModuleByName('kernel32').getExportByName('GetThreadContext'),
         'uint32', ['pointer', 'pointer']);
     const SetThreadContext = new NativeFunction(
-        Module.getExportByName('kernel32', 'SetThreadContext'),
+        Process.getModuleByName('kernel32').getExportByName('SetThreadContext'),
         'uint32', ['pointer', 'pointer']);
     const SuspendThread = new NativeFunction(
-        Module.getExportByName('kernel32', 'SuspendThread'),
+        Process.getModuleByName('kernel32').getExportByName('SuspendThread'),
         'uint32', ['pointer']);
     const ResumeThread = new NativeFunction(
-        Module.getExportByName('kernel32', 'ResumeThread'),
+        Process.getModuleByName('kernel32').getExportByName('ResumeThread'),
         'uint32', ['pointer']);
     const CloseHandle = new NativeFunction(
-        Module.getExportByName('kernel32', 'CloseHandle'),
+        Process.getModuleByName('kernel32').getExportByName('CloseHandle'),
         'uint32', ['pointer']);
     const CreateEventW = new NativeFunction(
-        Module.getExportByName('kernel32', 'CreateEventW'),
+        Process.getModuleByName('kernel32').getExportByName('CreateEventW'),
         'pointer', ['pointer', 'bool', 'bool', 'pointer']);
     const ResetEvent = new NativeFunction(
-        Module.getExportByName('kernel32', 'ResetEvent'),
+        Process.getModuleByName('kernel32').getExportByName('ResetEvent'),
         'bool', ['pointer']);
     const WaitForSingleObject = new NativeFunction(
-        Module.getExportByName('kernel32', 'WaitForSingleObject'),
+        Process.getModuleByName('kernel32').getExportByName('WaitForSingleObject'),
         'uint32', ['pointer', 'uint32']);
     const PostThreadMessageW = new NativeFunction(
-        Module.getExportByName('user32', 'PostThreadMessageW'),
+        Process.getModuleByName('user32').getExportByName('PostThreadMessageW'),
         'bool', ['uint32', 'uint32', 'pointer', 'pointer']);
 
     /* attach thread */
     const threadId = new NativeFunction(
-        Module.getExportByName('kernel32', 'GetThreadId'),
+        Process.getModuleByName('kernel32').getExportByName('GetThreadId'),
         'uint32', ['pointer'])(threadHandle);
 
     let thumb = NULL;
     let routine = new NativeCallback(function(hEvent) {
         func(parameter);
         new NativeFunction(
-            Module.getExportByName('kernel32', 'SetEvent'),
+            Process.getModuleByName('kernel32').getExportByName('SetEvent'),
             'bool', ['pointer'])(hEvent);
     }, 'void', ['pointer']);
     Process.enumerateThreads().forEach(function(thread) {
@@ -186,7 +193,7 @@ function patchThreadNotify()
     function GetLdrpInitialize()
     {
         let LdrpInitialize = NULL;
-        const LdrInitializeThunk = Module.getExportByName('ntdll', 'LdrInitializeThunk');
+        const LdrInitializeThunk = Process.getModuleByName('ntdll').getExportByName('LdrInitializeThunk');
 
         let target = LdrInitializeThunk;
         for (;;) {
