@@ -174,7 +174,7 @@ GetThreadFunctionFromThreadId(Process.enumerateThreads()[0].id, function(hThread
 //     function GetLdrpCallInitRoutine()
 //     {
 //         return new NativeFunction(
-//             Module.getBaseAddress('ntdll.dll').add(/* SYMBOL RVA */),
+//             Process.getModuleByName('ntdll.dll').base.add(/* SYMBOL RVA */),
 //             'bool', ['pointer', 'pointer', 'uint32', 'pointer']);
 //     }
 //     const LdrpCallInitRoutine = GetLdrpCallInitRoutine();
