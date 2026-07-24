@@ -81,6 +81,220 @@ class StdString {
 }
 
 // ---------------------------------------------------------------------------
+// StdTree - MSVC std::_Tree (std::map / std::set) node reader & traversal
+// ---------------------------------------------------------------------------
+/**
+ * MSVC _Tree_node layout (x64):
+ *   +0x00  _Left    (head: leftmost node  / node: left child)
+ *   +0x08  _Parent  (head: root node      / node: parent)
+ *   +0x10  _Right   (head: rightmost node / node: right child)
+ *   +0x18  _Color   (0 = red, 1 = black)
+ *   +0x19  _Isnil   (1 = sentinel head node, 0 = real node)
+ *   +0x20  _Myval   (set<T>: T;  map<K,V>: pair<const K, V>)
+ *
+ * The sentinel head node (_Isnil == 1) is allocated by the std::_Tree object.
+ * For a non-empty tree its _Left/_Parent/_Right point at the first/root/last
+ * real nodes; for an empty tree all three point back at the head itself.
+ */
+class StdTreeNode {
+    constructor(ptr) {
+        this._ptr = ptr;
+    }
+
+    get left() {
+        return this._ptr.readPointer();
+    }
+
+    get parent() {
+        return this._ptr.add(8).readPointer();
+    }
+
+    get right() {
+        return this._ptr.add(16).readPointer();
+    }
+
+    /** 0 = red, 1 = black */
+    get color() {
+        return this._ptr.add(24).readU8();
+    }
+
+    get colorName() {
+        return this.color === 0 ? 'red' : 'black';
+    }
+
+    /** true for the sentinel head node (not a real element) */
+    get isNil() {
+        return this._ptr.add(25).readU8() !== 0;
+    }
+
+    /**
+     * Pointer to the stored value (_Myval at +0x20).
+     * Interpretation depends on the container's value_type:
+     *   set<T>    → T
+     *   map<K,V>  → pair<const K, V>  (K at +0x00, V after K, aligned)
+     */
+    data() {
+        return this._ptr.add(32);
+    }
+
+    toString() {
+        const tag = this.isNil ? 'head' : this.colorName;
+        return `StdTreeNode(${this._ptr}, ${tag})`;
+    }
+}
+
+/**
+ * In-order (sorted) traversal over a MSVC std::_Tree.
+ * Construct with the sentinel head node address, or use fromTreeObject()
+ * with the std::map/std::set object address.
+ */
+class StdTree {
+    /** @param {NativePointer} headPtr - address of the _Isnil==1 head node */
+    constructor(headPtr) {
+        this._head = new StdTreeNode(headPtr);
+    }
+
+    /**
+     * Build from the std::_Tree (std::map/std::set) object itself.
+     * MSVC x64 object layout: +0x00 = _Myhead, +0x08 = _Mysize.
+     * @param {NativePointer} treePtr
+     */
+    static fromTreeObject(treePtr) {
+        return new StdTree(treePtr.readPointer());
+    }
+
+    get head() {
+        return this._head;
+    }
+
+    get isEmpty() {
+        return this._head.left.equals(this._head._ptr);
+    }
+
+    /** First (minimum) node pointer; equals head when the tree is empty */
+    get first() {
+        return this._head.left;
+    }
+
+    /** Last (maximum) node pointer; equals head when the tree is empty */
+    get last() {
+        return this._head.right;
+    }
+
+    /** Root node pointer; equals head when the tree is empty */
+    get root() {
+        return this._head.parent;
+    }
+
+    /**
+     * All real nodes in sorted order. Aborts early on corrupt pointers
+     * or when maxNodes is exceeded, returning whatever was collected.
+     * @param {number} [maxNodes=100000] safety cap
+     * @returns {StdTreeNode[]}
+     */
+    nodes(maxNodes) {
+        maxNodes = maxNodes || 100000;
+        const out = [];
+        try {
+            let node = new StdTreeNode(this.first);
+            while (!node.isNil && out.length < maxNodes) {
+                out.push(node);
+                // in-order successor
+                const right = new StdTreeNode(node.right);
+                if (!right.isNil) {
+                    node = right;
+                    let next = new StdTreeNode(node.left);
+                    while (!next.isNil) {
+                        node = next;
+                        next = new StdTreeNode(node.left);
+                    }
+                } else {
+                    let parent = new StdTreeNode(node.parent);
+                    while (!parent.isNil && node._ptr.equals(parent.right)) {
+                        node = parent;
+                        parent = new StdTreeNode(parent.parent);
+                    }
+                    node = parent;
+                }
+            }
+        } catch (e) {
+            log('stdtree', `walk aborted after ${out.length} nodes: ${e.message}`);
+        }
+        if (out.length >= maxNodes) {
+            log('stdtree', `walk hit maxNodes cap (${maxNodes}) - tree may be corrupt`);
+        }
+        return out;
+    }
+
+    /**
+     * Value pointers (_Myval) of all nodes, in sorted order.
+     * @param {function(StdTreeNode): *} [read] optional per-node reader;
+     *        defaults to returning the raw data() pointer
+     * @returns {Array}
+     */
+    values(read) {
+        read = read || function (node) { return node.data(); };
+        return this.nodes().map(function (node) { return read(node); });
+    }
+
+    /**
+     * Log one line per node with structure info.
+     * @param {function(StdTreeNode): string} [read] optional value formatter
+     */
+    dump(read) {
+        const nodes = this.nodes();
+        log('stdtree', `head=${this._head._ptr} empty=${this.isEmpty} count=${nodes.length}`);
+        nodes.forEach(function (node, i) {
+            let extra = '';
+            if (read) {
+                try {
+                    extra = ' value=' + read(node);
+                } catch (e) {
+                    extra = ` value=<read error: ${e.message}>`;
+                }
+            }
+            log('stdtree', `#${i} ${node.colorName} node=${node._ptr}` +
+                ` left=${node.left} parent=${node.parent} right=${node.right}` +
+                ` data=${node.data()}${extra}`);
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Helper: wait for a module to be loaded, then run a callback with it
+// ---------------------------------------------------------------------------
+/**
+ * Some DLLs (e.g. pddconfig.dll) are loaded lazily after process start, so
+ * looking them up during the initial hook pass can fail with "unable to
+ * find module". Poll until the module appears (or give up after a while).
+ * @param {string} name module file name, e.g. 'pddconfig.dll'
+ * @param {function(Module): void} callback invoked once the module is found
+ * @param {number} [intervalMs=200] poll interval
+ * @param {number} [maxAttempts=50] give up after this many polls
+ */
+function waitForModule(name, callback, intervalMs, maxAttempts) {
+    intervalMs = intervalMs || 200;
+    maxAttempts = maxAttempts || 50;
+
+    let attempts = 0;
+    const timer = setInterval(function () {
+        const mod = Process.findModuleByName(name);
+        if (mod) {
+            clearInterval(timer);
+            log('wait-module', `Module '${name}' loaded after ${attempts} attempt(s)`);
+            callback(mod);
+            return;
+        }
+
+        attempts++;
+        if (attempts >= maxAttempts) {
+            clearInterval(timer);
+            log('wait-module', `Timed out waiting for module '${name}' after ${attempts} attempts`);
+        }
+    }, intervalMs);
+}
+
+// ---------------------------------------------------------------------------
 // Backtrace helper
 // ---------------------------------------------------------------------------
 function bt(ctx, limit) {
@@ -230,20 +444,13 @@ function hookCreateWindowExW() {
 
             try {
                 const wi = new WindowInfo(hWnd);
-
-                // Check if the window matches the criteria: title and class name are 32-character hex strings, and size is 476x468
-                if (isHex32(wi.title) && isHex32(wi.className) &&
-                    wi.width === 476 && wi.height === 468) {
-                    log('destroy', `CreateWindowExW → destroying matched window: ${wi}`);
-                    DestroyWindow(hWnd);
-                }
             } catch (e) {
                 // Silently ignore — don't break normal window creation
             }
         }
     });
 
-    log('hook', 'CreateWindowExW hook installed (destroying 476x468 hex-titled windows after creation)');
+    log('hook', 'CreateWindowExW hook installed (destroying windows after creation)');
 }
 
 // ---------------------------------------------------------------------------
@@ -364,13 +571,29 @@ function hookCreateProcess() {
 }
 
 // ---------------------------------------------------------------------------
-// Hook: ClientFunctionMgr::getFuncEnable
+// Hook: ConfigCenter::GetItem (pddconfig.dll)
 // ---------------------------------------------------------------------------
-function hookGetFuncEnable() {
-    const mod = Process.getModuleByName(CONFIG.moduleName);
-    // 3.6.0.14: 0x49C3C0
-    // 3.6.7.6:  0x4C0FF0
-    const targetAddr = mod.base.add(0x4C0FF0);
+/** @param {Module} mod resolved pddconfig.dll module */
+function hookConfigGetItem(mod) {
+    // pddconfig.dll — resolved by mangled export name
+    const targets = [
+        {
+            name: 'GetItem<string>', kind: 'string',
+            addr: mod.getExportByName('??$GetItem@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@ConfigCenter@@QEBA_NV?$basic_string_view@DU?$char_traits@D@std@@@std@@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@2@1AEAV32@@Z'),
+        },
+        {
+            name: 'GetItem<bool>', kind: 'bool',
+            addr: mod.getExportByName('??$GetItem@_N@ConfigCenter@@QEBA_NV?$basic_string_view@DU?$char_traits@D@std@@@std@@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@2@1AEA_N@Z'),
+        },
+        {
+            name: 'GetItem<long>', kind: 'long',
+            addr: mod.getExportByName('??$GetItem@J@ConfigCenter@@QEBA_NV?$basic_string_view@DU?$char_traits@D@std@@@std@@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@2@1AEAJ@Z'),
+        },
+        {
+            name: 'GetItem<double>', kind: 'double',
+            addr: mod.getExportByName('??$GetItem@N@ConfigCenter@@QEBA_NV?$basic_string_view@DU?$char_traits@D@std@@@std@@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@2@1AEAN@Z'),
+        },
+    ];
 
     const skipKeywords = [
         'func_enable_start_check_update_276',
@@ -383,46 +606,68 @@ function hookGetFuncEnable() {
         'func_enable_config_rollback_update_339',
         'enable_func_anti_update_limit_time',
         // 'func_enable_ignore_update_277',
+        // 'func_detect_debugger_275',
     ];
 
-    Interceptor.attach(targetAddr, {
-        onEnter(args) {
-            const stdStr = new StdString(args[1]);
-            const strValue = stdStr.read();
+    targets.forEach(function (t) {
+        Interceptor.attach(t.addr, {
+            onEnter(args) {
+                this.shouldSkip = false;
+                this.kind = t.kind;
+                this.outPtr = args[4];
 
-            this.shouldSkip = false;
-            this.strValue = strValue;
+                let key = '';
+                try {
+                    key = new StdString(args[3]).read();
+                } catch (e) { }
+                this.key = key;
 
-            // log('enter', 'getFuncEnable',
-            //     `arg1="${strValue}"`,
-            //     `caller=${DebugSymbol.fromAddress(this.returnAddress)}`);
+                const matched = skipKeywords.find(function (kw) { return key.includes(kw); });
+                if (matched) {
+                    this.shouldSkip = true;
+                    this.matched = matched;
+                    log('skip2', `${t.name} matched "${matched}"`);
+                }
+            },
+            onLeave(retval) {
+                if (!this.shouldSkip) {
+                    return;
+                }
 
-            // // Dump raw memory of arg1 for debugging
-            // log('dump', 'arg1 raw', '\n' + hexdump(args[1], { length: 32, ansi: true }));
+                try {
+                    let original;
+                    if (this.kind === 'string') {
+                        original = new StdString(this.outPtr).read();
+                    }
+                    if (this.kind === 'bool') {
+                        original = this.outPtr.readU8();
+                        this.outPtr.writeU8(0);
+                    } else if (this.kind === 'long') {
+                        original = this.outPtr.readS32();
+                        this.outPtr.writeS32(0);
 
-            const matched = skipKeywords.find(function (kw) { return strValue.includes(kw); });
-            if (matched) {
-                this.shouldSkip = true;
-                log('skip', `Matched "${matched}" → will force retval=0`);
+                    } else if (this.kind === 'double') {
+                        original = this.outPtr.readDouble();
+                        this.outPtr.writeDouble(0);
+                    }
+
+                    retval.replace(1);
+                    log('patched2', `${t.name} out-param original=${original} -> forced=0 key="${this.key}"`);
+                } catch (e) {
+                    log('skip2', `${t.name} clear out-param failed: ${e}`);
+                }
             }
-        },
-        onLeave(retval) {
-            if (this.shouldSkip) {
-                const original = retval.toInt32();
-                retval.replace(0);
-                log('patched', 'getFuncEnable',
-                    `original=${original} → forced=0`,
-                    `key="${this.strValue}"`);
-            }
-        }
+        });
     });
+
+    log('hook', `ConfigCenter::GetItem hooks installed (${targets.length} targets)`);
 }
 
 // ---------------------------------------------------------------------------
 // Hook: MallCSID
 // ---------------------------------------------------------------------------
 function hookMallCSID() {
-    const mod = Process.getModuleByName(CONFIG.moduleName);
+    const mod = Process.mainModule;
     // 3.6.7.6:  0x1DD6B9
     const targetAddr = mod.base.add(0x1DD6B9);
 
@@ -440,6 +685,37 @@ function hookMallCSID() {
         },
         onLeave(retval) {}
     });
+}
+
+// ---------------------------------------------------------------------------
+// Hook: workbenchdb.dll insert
+// ---------------------------------------------------------------------------
+/**
+ *   arg2 = mallcsid        — MSVC std::string
+ *   arg3 = message         — struct pointer
+ *   message + 0xC8         — std::string (message content)
+ */
+function hookDbInsert() {
+    const mod = Process.getModuleByName('workbenchdb.dll');
+    // 3.6.7.6:  0x82B0
+    const targetAddr = mod.base.add(0x82B0);
+
+    Interceptor.attach(targetAddr, {
+        onEnter(args) {
+            try {
+                const mallcsid = new StdString(args[1]).read();
+                const message = new StdString(args[2].add(0xC8)).read();
+
+                log('db-insert', `mallcsid="${mallcsid}"`);
+                log('db-insert', `message="${JSON.stringify(message)}"`);
+            } catch (e) {
+                log('db-insert', `Failed to read args: ${e}`);
+            }
+        },
+        onLeave(retval) {}
+    });
+
+    log('hook', 'workbenchdb.dll insert hook installed (+0x82B0)');
 }
 
 // ---------------------------------------------------------------------------
@@ -493,11 +769,68 @@ new Promise(function () {
             hookLdrLoadDll();
             hookCreateWindowExW();
             hookCreateProcess();
-            hookGetFuncEnable();
-            hookMallCSID();
+            waitForModule('pddconfig.dll', hookConfigGetItem);
+            // hookDbInsert();
             log('init', `Hooks installed (version=${CONFIG.activeVersion})`);
         } catch (e) {
             log('error', `Init failed: ${e}`);
         }
     }, 100);
 });
+
+rpc.exports = {
+    getpassids: function () {
+        const instance = new NativeFunction(
+            Process.getModuleByName("pddworkbenchdata.dll").getExportByName("?GetInstance@IUserCenter@@SAPEAV1@XZ"),
+            'pointer',
+            []
+        )();
+        const tree = new StdTree(instance.add(0x10).readPointer());
+        return tree.values(n => new StdString(n.data().add(0x20)).read());
+    },
+    getcurrentmallid: function () {
+        const instance = new NativeFunction(
+            Process.getModuleByName("pddworkbenchdata.dll").getExportByName("?GetInstance@IUserCenter@@SAPEAV1@XZ"),
+            'pointer',
+            []
+        )();
+        return new StdString(instance.add(0x398)).read();
+    },
+    getmallnicknames: function () {
+        const instance = new NativeFunction(
+            Process.getModuleByName("pddworkbenchdata.dll").getExportByName("?GetInstance@IUserCenter@@SAPEAV1@XZ"),
+            'pointer',
+            []
+        )();
+        const tree = new StdTree(instance.add(0x168+8).readPointer());
+        return tree.values(n => new StdString(n.data().add(0x20)).read());
+    },
+    getcurrenttoids: function () {
+        const instance = new NativeFunction(
+            Process.getModuleByName("pddworkbenchdata.dll").getExportByName("?GetInstance@IUserCenter@@SAPEAV1@XZ"),
+            'pointer',
+            []
+        )();
+        const tree = new StdTree(instance.add(0x2f8+8).readPointer());
+        return tree.values(n => new StdString(n.data().add(0x20)).read());
+    },
+    notifyselectuserswitch: function () {
+        const instance = new NativeFunction(
+            Process.getModuleByName("pddworkbenchdata.dll").getExportByName("?GetInstance@IUserCenter@@SAPEAV1@XZ"),
+            'pointer',
+            []
+        )();
+
+        // C++ object layout: [0x0] = vtable pointer
+        const vtbl = instance.readPointer();
+        const target = vtbl.add(0x490).readPointer(); // 146th virtual function
+
+        // selectUserSwitchHook = Interceptor.attach(target, {
+        //     onEnter(args) {
+        //         log('notify', `select user vfunc hit this=${args[0]} ret=${this.returnAddress}`);
+        //     }
+        // });
+
+        log('hook', `select user switch hook installed: instance=${instance} vtbl=${vtbl} target=${target}`);
+    }
+};
