@@ -664,27 +664,35 @@ function hookConfigGetItem(mod) {
 }
 
 // ---------------------------------------------------------------------------
-// Hook: MallCSID
+// Hook: IUserCenter select-user (店铺/联系人切换) vfunc
 // ---------------------------------------------------------------------------
-function hookMallCSID() {
-    const mod = Process.mainModule;
-    // 3.6.7.6:  0x1DD6B9
-    const targetAddr = mod.base.add(0x1DD6B9);
+/**
+ * IUserCenter::vtbl[0x490 / 8 = 146th virtual function] fires when the
+ * active contact/mall (联系人) selection changes.
+ */
+function hookSelectUser() {
+    const instance = new NativeFunction(
+        Process.getModuleByName('pddworkbenchdata.dll').getExportByName('?GetInstance@IUserCenter@@SAPEAV1@XZ'),
+        'pointer',
+        []
+    )();
 
-    Interceptor.attach(targetAddr, {
+    // C++ object layout: [0x0] = vtable pointer
+    const vtbl = instance.readPointer();
+    const target = vtbl.add(0x490).readPointer(); // 146th virtual function
+
+    Interceptor.attach(target, {
         onEnter(args) {
             try {
-                const stdStr = new StdString((this.context).rax);
-                const value = stdStr.read();
-                if (value) {
-                    log('mallcsid', `MallCSID = "${value}"`);
-                }
-            } catch (e) {
-                log('mallcsid', `Failed to read std::string at ${strPtr}: ${e}`);
-            }
-        },
-        onLeave(retval) {}
+                const mallcsid = new StdString(args[1]).read();
+                const userId = new StdString(args[2]).read();
+
+                log('select-user', `switch to mallcsid="${mallcsid}" userId="${userId}"`);
+            } catch (e) { }
+        }
     });
+
+    log('hook', `select user switch hook installed: instance=${instance} vtbl=${vtbl} target=${target}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -716,6 +724,30 @@ function hookDbInsert() {
     });
 
     log('hook', 'workbenchdb.dll insert hook installed (+0x82B0)');
+}
+
+// ---------------------------------------------------------------------------
+// Hook: MallCSID
+// ---------------------------------------------------------------------------
+function hookMallCSID() {
+    const mod = Process.mainModule;
+    // 3.6.7.6:  0x1DD6B9
+    const targetAddr = mod.base.add(0x1DD6B9);
+
+    Interceptor.attach(targetAddr, {
+        onEnter(args) {
+            try {
+                const stdStr = new StdString((this.context).rax);
+                const value = stdStr.read();
+                if (value) {
+                    log('mallcsid', `MallCSID = "${value}"`);
+                }
+            } catch (e) {
+                log('mallcsid', `Failed to read std::string at ${strPtr}: ${e}`);
+            }
+        },
+        onLeave(retval) {}
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -770,6 +802,7 @@ new Promise(function () {
             hookCreateWindowExW();
             hookCreateProcess();
             waitForModule('pddconfig.dll', hookConfigGetItem);
+            // hookSelectUser();
             // hookDbInsert();
             log('init', `Hooks installed (version=${CONFIG.activeVersion})`);
         } catch (e) {
@@ -813,24 +846,5 @@ rpc.exports = {
         )();
         const tree = new StdTree(instance.add(0x2f8+8).readPointer());
         return tree.values(n => new StdString(n.data().add(0x20)).read());
-    },
-    notifyselectuserswitch: function () {
-        const instance = new NativeFunction(
-            Process.getModuleByName("pddworkbenchdata.dll").getExportByName("?GetInstance@IUserCenter@@SAPEAV1@XZ"),
-            'pointer',
-            []
-        )();
-
-        // C++ object layout: [0x0] = vtable pointer
-        const vtbl = instance.readPointer();
-        const target = vtbl.add(0x490).readPointer(); // 146th virtual function
-
-        // selectUserSwitchHook = Interceptor.attach(target, {
-        //     onEnter(args) {
-        //         log('notify', `select user vfunc hit this=${args[0]} ret=${this.returnAddress}`);
-        //     }
-        // });
-
-        log('hook', `select user switch hook installed: instance=${instance} vtbl=${vtbl} target=${target}`);
     }
 };
