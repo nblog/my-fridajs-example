@@ -30,7 +30,7 @@ const CONFIG = {
 const log = function (tag, ...args) {
     const tid = Process.getCurrentThreadId();
     const ts = new Date().toISOString().slice(11, 19); // HH:mm:ss
-    console.log(`[frida][${ts}] ${tag}:`, ...args);
+    console.log(`[${CONFIG.moduleName}][${ts}] ${tag}:`, ...args);
 };
 
 // ---------------------------------------------------------------------------
@@ -261,60 +261,6 @@ class StdTree {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: wait for a module to be loaded, then run a callback with it
-// ---------------------------------------------------------------------------
-/**
- * Some DLLs (e.g. pddconfig.dll) are loaded lazily after process start, so
- * looking them up during the initial hook pass can fail with "unable to
- * find module". Poll until the module appears (or give up after a while).
- * @param {string} name module file name, e.g. 'pddconfig.dll'
- * @param {function(Module): void} callback invoked once the module is found
- * @param {number} [intervalMs=200] poll interval
- * @param {number} [maxAttempts=50] give up after this many polls
- */
-function waitForModule(name, callback, intervalMs, maxAttempts) {
-    intervalMs = intervalMs || 200;
-    maxAttempts = maxAttempts || 50;
-
-    let attempts = 0;
-    const timer = setInterval(function () {
-        const mod = Process.findModuleByName(name);
-        if (mod) {
-            clearInterval(timer);
-            log('wait-module', `Module '${name}' loaded after ${attempts} attempt(s)`);
-            callback(mod);
-            return;
-        }
-
-        attempts++;
-        if (attempts >= maxAttempts) {
-            clearInterval(timer);
-            log('wait-module', `Timed out waiting for module '${name}' after ${attempts} attempts`);
-        }
-    }, intervalMs);
-}
-
-// ---------------------------------------------------------------------------
-// Backtrace helper
-// ---------------------------------------------------------------------------
-function bt(ctx, limit) {
-    limit = limit || 8;
-    return Thread.backtrace(ctx, Backtracer.ACCURATE)
-        .slice(0, limit)
-        .map(function (addr) {
-            const sym = DebugSymbol.fromAddress(addr);
-            const mod = Process.findModuleByAddress(addr);
-            if (mod) {
-                const offset = addr.sub(mod.base);
-                return sym.name
-                    ? `${mod.name}!${sym.name}+0x${offset.toString(16)}`
-                    : `${mod.name}+0x${offset.toString(16)}`;
-            }
-            return addr.toString();
-        });
-}
-
-// ---------------------------------------------------------------------------
 // Win32 API wrappers (user32.dll)
 // ---------------------------------------------------------------------------
 const GetWindowTextW = new NativeFunction(
@@ -420,6 +366,40 @@ class WindowInfo {
             + `parent=0x${this.parent.toString(16)}, `
             + `size=${this.width}x${this.height})`;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Helper: wait for a module to be loaded, then run a callback with it
+// ---------------------------------------------------------------------------
+/**
+ * Some DLLs (e.g. pddconfig.dll) are loaded lazily after process start, so
+ * looking them up during the initial hook pass can fail with "unable to
+ * find module". Poll until the module appears (or give up after a while).
+ * @param {string} name module file name, e.g. 'pddconfig.dll'
+ * @param {function(Module): void} callback invoked once the module is found
+ * @param {number} [intervalMs=200] poll interval
+ * @param {number} [maxAttempts=50] give up after this many polls
+ */
+function waitForModule(name, callback, intervalMs, maxAttempts) {
+    intervalMs = intervalMs || 200;
+    maxAttempts = maxAttempts || 50;
+
+    let attempts = 0;
+    const timer = setInterval(function () {
+        const mod = Process.findModuleByName(name);
+        if (mod) {
+            clearInterval(timer);
+            log('wait-module', `Module '${name}' loaded after ${attempts} attempt(s)`);
+            callback(mod);
+            return;
+        }
+
+        attempts++;
+        if (attempts >= maxAttempts) {
+            clearInterval(timer);
+            log('wait-module', `Timed out waiting for module '${name}' after ${attempts} attempts`);
+        }
+    }, intervalMs);
 }
 
 // ---------------------------------------------------------------------------
