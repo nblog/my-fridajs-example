@@ -6,9 +6,9 @@
  *
  * Usage:
  *   uvx --from frida-tools frida --help
- *   uvx --from frida-tools frida -l pdd-check-update.js -f "path\to\PddWorkbench.exe"
+ *   uvx --from frida-tools frida -l PddWorkbench.js -f "path\to\PddWorkbench.exe"
  *   # or attach to running process:
- *   uvx --from frida-tools frida -l pdd-check-update.js -n PddWorkbench.exe
+ *   uvx --from frida-tools frida -l PddWorkbench.js -n PddWorkbench.exe
  *
  * Attach mode notes:
  *   PDDProtect.dll hooks LdrLoadDll to detect and block frida-agent.dll.
@@ -846,5 +846,18 @@ rpc.exports = {
         )();
         const tree = new StdTree(instance.add(0x2f8+8).readPointer());
         return tree.values(n => new StdString(n.data().add(0x20)).read());
+    },
+    test: function () {
+        // new NativeFunction(
+        //     Process.mainModule.add(0x3D3F0),
+        //     'void',
+        //     ['pointer', 'pointer', 'pointer', 'pointer', 'pointer', 'pointer', 'pointer', 'pointer']
+        // )(r13_830, mallcsid, customerid, message, message, r13_850, Memory.alloc(16), token);
+
+        new NativeFunction(
+            Process.getModuleByName('user32.dll').getExportByName('PostMessageW'),
+            'bool',
+            ['pointer', 'uint', 'pointer', 'pointer']
+        )(ptr(0x5B04CA), 0x140E, Memory.allocUtf8String("cs_465616878_166414339"), Memory.allocUtf8String("7944428353327"));
     }
 };
