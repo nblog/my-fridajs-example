@@ -114,7 +114,7 @@ function ExecInAnyThread(threadHandle = NULL, callback = function (parameter = N
     Process.enumerateThreads().forEach(function (thread) {
         if (thread.id != threadId) return;
 
-        let hEvent = CreateEventW(NULL, 1, 0, Memory.allocUtf16String('fridajs-rpc-event'));
+        let hEvent = CreateEventW(NULL, 1 /* manual reset */, 0 /* non-signalled */, Memory.allocUtf16String('fridajs-rpc-event'));
         ResetEvent(hEvent);
 
         thumb = Memory.alloc(Process.pageSize);
@@ -144,9 +144,10 @@ function ExecInAnyThread(threadHandle = NULL, callback = function (parameter = N
 
         ResumeThread(threadHandle);
 
-        /* hi */
+        /* Nudge the thread in case it is parked in a message wait. */
         PostThreadMessageW(thread.id, 0x0000 /* WM_NULL */, NULL, NULL);
 
+        /* Wait for callback() to run to completion. */
         WaitForSingleObject(hEvent, 30 * 1000 /* 30s */);
 
         if (hEvent != NULL) CloseHandle(hEvent);
