@@ -1,16 +1,13 @@
 ///<reference path='C:/Users/r0th3r/OneDrive/Code/index.d.ts'/>
 
 
-function GetThreadFunctionFromThreadId(threadId=0, func=function(hThread=ptr(-2)){})
-{
+function GetThreadFunctionFromThreadId(threadId = 0, callback = function (hThread = ptr(-2)) { }) {
     const CloseHandle = new NativeFunction(
         Process.getModuleByName('kernel32').getExportByName('CloseHandle'),
         'uint32', ['pointer']);
     const OpenThread = new NativeFunction(
         Process.getModuleByName('kernel32').getExportByName('OpenThread'),
         'pointer', ['uint32', 'bool', 'uint32']);
-
-    let threadAny;
 
     /* Minimal rights required by ExecInAnyThread():
      *   THREAD_SUSPEND_RESUME   (0x0002) - SuspendThread / ResumeThread
@@ -21,22 +18,18 @@ function GetThreadFunctionFromThreadId(threadId=0, func=function(hThread=ptr(-2)
     const thread_access = 0x0002 | 0x0008 | 0x0010 | 0x0040;
     let hThread = OpenThread(thread_access, 0, threadId);
 
-    if (hThread.equals(NULL)) return threadAny;
+    if (hThread.equals(NULL)) return;
 
-    threadAny = func(hThread);
+    callback(hThread);
 
     if (!hThread.equals(NULL)) CloseHandle(hThread);
-
-    return threadAny;
 }
-function GetCurrentThread()
-{
+function GetCurrentThread() {
     return new NativeFunction(
         Process.getModuleByName('kernel32').getExportByName('GetCurrentThread'),
         'pointer', [])();
 }
-function GetThreadName(threadHandle=NULL)
-{
+function GetThreadName(threadHandle = NULL) {
     const NtQueryInformationThread = new NativeFunction(
         Process.getModuleByName('ntdll').getExportByName('NtQueryInformationThread'),
         'uint32', ['pointer', 'uint32', 'pointer', 'uint32', 'pointer']);
@@ -49,17 +42,17 @@ function GetThreadName(threadHandle=NULL)
             UNICODE_STRING ThreadName;
         } THREAD_NAME_INFORMATION, *PTHREAD_NAME_INFORMATION;
     */
-    let threadNameInfo = Memory.alloc(16 + 128);
+    const threadNameInfoSize = 16 + 128; /* sizeof(THREAD_NAME_INFORMATION) + sizeof(WCHAR) * 64 */
+    let threadNameInfo = Memory.alloc(threadNameInfoSize);
     const ntstatus = NtQueryInformationThread(
-        threadHandle, 
-        38 /* ThreadNameInformation */, 
-        threadNameInfo, (16 + 128), NULL);
+        threadHandle,
+        38 /* ThreadNameInformation */,
+        threadNameInfo, threadNameInfoSize, NULL);
 
-    return 0 == ntstatus ? 
-    threadNameInfo.add(Process.pointerSize).readPointer().readUtf16String() : NULL;
+    return 0 == ntstatus ?
+        threadNameInfo.add(Process.pointerSize).readPointer().readUtf16String() : NULL;
 }
-function GetThreadStartAddress(threadHandle=NULL)
-{
+function GetThreadStartAddress(threadHandle = NULL) {
     const NtQueryInformationThread = new NativeFunction(
         Process.getModuleByName('ntdll').getExportByName('NtQueryInformationThread'),
         'uint32', ['pointer', 'uint32', 'pointer', 'uint32', 'pointer']);
@@ -69,13 +62,12 @@ function GetThreadStartAddress(threadHandle=NULL)
 
     let threadStartAddress = Memory.alloc(Process.pointerSize);
     const ntstatus = NtQueryInformationThread(
-        threadHandle, 
-        9 /* ThreadQuerySetWin32StartAddress */, 
+        threadHandle,
+        9 /* ThreadQuerySetWin32StartAddress */,
         threadStartAddress, Process.pointerSize, NULL);
     return 0 == ntstatus ? threadStartAddress.readPointer() : NULL;
 }
-function ExecInAnyThread(threadHandle=NULL, func=function(parameter=NULL){}, parameter=NULL)
-{
+function ExecInAnyThread(threadHandle = NULL, callback = function (parameter = NULL) { }, parameter = NULL) {
     const GetLastError = new NativeFunction(
         Process.getModuleByName('kernel32').getExportByName('GetLastError'),
         'uint32', []);
@@ -113,13 +105,13 @@ function ExecInAnyThread(threadHandle=NULL, func=function(parameter=NULL){}, par
         'uint32', ['pointer'])(threadHandle);
 
     let thumb = NULL;
-    let routine = new NativeCallback(function(hEvent) {
-        func(parameter);
+    let routine = new NativeCallback(function (hEvent) {
+        callback(parameter);
         new NativeFunction(
             Process.getModuleByName('kernel32').getExportByName('SetEvent'),
             'bool', ['pointer'])(hEvent);
     }, 'void', ['pointer']);
-    Process.enumerateThreads().forEach(function(thread) {
+    Process.enumerateThreads().forEach(function (thread) {
         if (thread.id != threadId) return;
 
         let hEvent = CreateEventW(NULL, 1, 0, Memory.allocUtf16String('fridajs-rpc-event'));
@@ -160,16 +152,16 @@ function ExecInAnyThread(threadHandle=NULL, func=function(parameter=NULL){}, par
         if (hEvent != NULL) CloseHandle(hEvent);
     });
 }
-/*
-GetThreadFunctionFromThreadId(Process.enumerateThreads()[0].id, function(hThread) {
-    ExecInAnyThread(hThread, function(parameter) {
-        console.log(`[+] Executed Thread Id: ${Process.getCurrentThreadId()} ${parameter}`);
-    }, ptr(0x1337));
-});
-*/
+
+// GetThreadFunctionFromThreadId(Process.enumerateThreads()[0].id, function (hThread) {
+//     ExecInAnyThread(hThread, function (parameter) {
+//         console.log(`[+] Executed Thread Id: ${Process.getCurrentThreadId()} ${parameter}`);
+//     }, ptr(0x1337));
+// });
 
 
-// function patchThreadNotify2(m) 
+
+// function patchThreadNotify2(m)
 // {
 //     function GetLdrpCallInitRoutine()
 //     {
@@ -188,15 +180,13 @@ GetThreadFunctionFromThreadId(Process.enumerateThreads()[0].id, function(hThread
 //     );
 // } patchThreadNotify2(Process.enumerateModules()[0]);
 
-function patchThreadNotify()
-{
-    function GetLdrpInitialize()
-    {
+function patchThreadNotify() {
+    function GetLdrpInitialize() {
         let LdrpInitialize = NULL;
         const LdrInitializeThunk = Process.getModuleByName('ntdll').getExportByName('LdrInitializeThunk');
 
         let target = LdrInitializeThunk;
-        for (;;) {
+        for (; ;) {
             const i = Instruction.parse(target);
             if (i.mnemonic === 'call') {
                 LdrpInitialize = ptr(i.opStr);
@@ -210,7 +200,7 @@ function patchThreadNotify()
     /* https://github.com/mq1n/DLLThreadInjectionDetector/blob/master/DLLInjectionDetector/ThreadCheck.cpp */
     const LdrpInitialize = GetLdrpInitialize();
     Interceptor.attach(LdrpInitialize, {
-    onEnter(args) {
+        onEnter(args) {
             this.target = GetThreadStartAddress();
             /* WOW */
             this.arrbackup = new Uint8Array(this.target.readByteArray(1));
@@ -219,8 +209,7 @@ function patchThreadNotify()
             /* if (0 != retval.toInt32()) return; */
 
             if (this.target.readU8() != this.arrbackup[0] &&
-                null == Process.findModuleByAddress(this.target))
-            {
+                null == Process.findModuleByAddress(this.target)) {
                 this.target.writeByteArray(this.arrbackup);
             }
         }
