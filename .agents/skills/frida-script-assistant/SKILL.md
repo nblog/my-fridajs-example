@@ -57,10 +57,11 @@ When the output file extension is `.js` (not `.ts`), the generated code **MUST b
 ```js
 /// <reference path="index.d.ts" />
 
-// Structured logging with timestamp and thread ID
-const log = (tag, ...args) => {
-  const tid = Process.getCurrentThreadId();
-  console.log(`[frida][t:${tid}] ${tag}:`, ...args);
+// Structured logging with timestamp
+const log = function (tag, ...args) {
+    const tid = Process.getCurrentThreadId();
+    const ts = new Date().toISOString().slice(11, 19); // HH:mm:ss
+    console.log(`[${Process.enumerateModules()[0].name}][${ts}] ${tag}:`, ...args);
 };
 
 // Backtrace helper: returns formatted call stack with module+offset
