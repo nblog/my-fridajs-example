@@ -105,12 +105,85 @@ Interceptor.replace(createProcessInternalW, new NativeCallback(function (
 ]));
 
 
+/** 获取当前工作目录(GetCurrentDirectoryW) */
+function getCurrentWorkingDirectory() {
+    const getCurrentDirectoryW = new NativeFunction(
+        Process.getModuleByName('kernel32.dll').getExportByName('GetCurrentDirectoryW'),
+        'uint32', ['uint32', 'pointer']
+    );
+    const buf = Memory.alloc(0x8000); // 32 KiB,足够容纳长路径
+    const len = getCurrentDirectoryW(0x8000, buf);
+    if (len === 0 || len > 0x8000) return '';
+    return buf.readUtf16String();
+}
+
+/**
+ * 从命令行字符串中解析出第一个 token(即可执行文件完整路径)。
+ * 支持带引号("C:\path\app.exe" args)与不带引号(C:\path\app.exe args)两种形式。
+ */
+function getExePathFromCommandLine() {
+    /** 获取当前进程完整命令行(GetCommandLineW) */
+    function getCurrentCommandLine() {
+        const getCommandLineW = new NativeFunction(
+            Process.getModuleByName('kernel32.dll').getExportByName('GetCommandLineW'),
+            'pointer', []
+        );
+        const p = getCommandLineW();
+        return p.isNull() ? '' : p.readUtf16String();
+    }
+
+    const cmdLine = getCurrentCommandLine();
+
+    if (!cmdLine) return '';
+    let i = 0;
+    while (i < cmdLine.length && (cmdLine[i] === ' ' || cmdLine[i] === '\t')) i++;
+    if (i >= cmdLine.length) return '';
+
+    if (cmdLine[i] === '"') {
+        const end = cmdLine.indexOf('"', i + 1);
+        return end === -1 ? '' : cmdLine.slice(i + 1, end);
+    }
+
+    const end = cmdLine.search(/[ \t]/);
+    return end === -1 ? cmdLine.slice(i) : cmdLine.slice(i, end);
+}
+
+/** 取路径的父目录(等价于 dirname),结果保留末尾反斜杠 */
+function dirname(path) {
+    if (!path) return '';
+    const trimmed = path.replace(/[\\/]+$/, '');
+    const idx = Math.max(trimmed.lastIndexOf('\\'), trimmed.lastIndexOf('/'));
+    return idx === -1 ? path : trimmed.slice(0, idx + 1);
+}
+
 rpc.exports = {
     x64dbgdir() {
-        return 'C:\\Users\\r0th3r\\Downloads\\Tools\\x64dbg\\release\\x64\\';
+        //   e.g. "...\release\x64\x64dbg.exe" -> "...\release\x64\" -> "...\release\"
+        const exePath = getExePathFromCommandLine();
+        if (exePath) {
+            const dir = dirname(dirname(exePath));
+            if (dir && dir !== exePath) {
+                console.log(`[+] x64dbgdir: from command line ("${exePath}") -> ${dir}`);
+                return dir;
+            }
+        }
+
+        //   e.g. "...\release\x64\" -> "...\release\"
+        const cwd = getCurrentWorkingDirectory();
+        if (cwd) {
+            const dir = dirname(cwd);
+            if (dir && dir !== cwd) {
+                console.log(`[+] x64dbgdir: from current directory -> ${dir}`);
+                return dir;
+            }
+        }
+
+        // fallback
+        return 'C:\\Users\\r0th3r\\Downloads\\Tools\\x64dbg\\release\\';
     },
     rundbg(x64dbgdir, commandline, pe32=false) {
-        const exePath = x64dbgdir + (pe32 ? 'x32dbg.exe' : 'x64dbg.exe');
+        // x64dbgdir 现指向 release 目录
+        const exePath = x64dbgdir + (pe32 ? 'x32\\x32dbg.exe' : 'x64\\x64dbg.exe');
         console.log(`[*] rundbg: launching ${exePath}`);
 
         // Allocate UTF-16 command line (writable buffer required by CreateProcessInternalW)
