@@ -137,13 +137,43 @@ function main() {
 - JavaScript API Doc: https://frida.re/docs/javascript-api/#table-of-contents
 - [`Interceptor`](https://github.com/frida/frida-website/blob/main/_i18n/en/_docs/javascript-api.md#instruction) for hooking functions, [`NativeFunction`](https://github.com/frida/frida-website/blob/main/_i18n/en/_docs/javascript-api.md#nativefunction) for calling exports/pointers, [`Module.enumerateExports/Imports`](https://github.com/frida/frida-website/blob/main/_i18n/en/_docs/javascript-api.md#module) for discovery, [`Memory.read/write/patch`](https://github.com/frida/frida-website/blob/main/_i18n/en/_docs/javascript-api.md#memory) for data capture or inline patching, [`Stalker`](https://github.com/frida/frida-website/blob/main/_i18n/en/_docs/javascript-api.md#stalker) for instruction-level tracing, `Java/ObjC` runtime APIs when on Android/iOS.
 
+## CLI invocation cues (`frida`)
+Pick device and target flags that match the clarified platform/target. Only one of `-D`, `-U`, `-R`, `-H` is accepted.
+
+Device selection:
+- `-U` USB device, `-R` default remote frida-server, `-H HOST[:PORT]` explicit server, `-D ID` a specific device; local device when all are omitted.
+- Env fallbacks exist when flags are absent: `FRIDA_DEVICE`, `FRIDA_HOST`, `FRIDA_CERTIFICATE`, `FRIDA_TOKEN`, `FRIDA_DEVICE_OPTIONS`.
+
+Session options:
+- `--stdio pipe` routes target stdout/stderr into the CLI (default is `inherit`).
+- `--runtime v8 --debug` enables the Node.js-compatible debugger on port 9229 for `Chrome DevTools`; required for breakpoints and `debugger` statements.
+
+## frida-trace as a discovery step
+When the goal is "find out what gets called" rather than a known hook, suggest `frida-trace` first and fold the findings into a script afterwards.
+
+Selection specs (repeatable, glob-aware):
+- `-i '[MODULE!]FUNCTION'` / `-x ...` include/exclude exports; `-I MODULE` / `-X MODULE` whole modules.
+- `-a 'MODULE!0x1234'` traces unexported code at a module-relative offset.
+- `-T` traces the program's imports, `-t MODULE` traces one module's imports.
+- Runtime-specific: `-j`/`-J` Java methods, `-m`/`-M` ObjC methods, `-y`/`-Y` Swift funcs, `-s` debug symbols (useful for stripped binaries that still ship PDB/DWARF).
+
+Handler workflow:
+- Stubs are generated under `./__handlers__/<module>/<function>.js` and hot-reloaded on save, so iterate there instead of restarting the process.
+- Native/Java/ObjC/Swift stubs use `defineHandler({ onEnter(log, args, state) {}, onLeave(log, retval, state) {} })`; instruction-flavor stubs from `-a` use `defineHandler(function (log, args, state) {})`.
+- Call `log()` instead of `console.log` inside handlers so output stays in the trace stream; `state` is a per-target object that persists across calls.
+- Handler files are plain JavaScript, so the JavaScript purity rule above applies to them too.
+- `-S init.js` runs a session-level script before tracing starts (shared helpers/globals); `-P '{"key":1}'` exposes a global `parameters` object to handlers.
+- `-o trace.log` writes messages to file, `-q` drops formatting, `-d` appends the module name to generated log statements.
+
+Convert traced offsets and observed signatures into a single `Interceptor.attach` script once the interesting call set is known.
+
 ## Delivery checklist
 - Confirm platform/arch/target and intended result (log, modify behavior, dump data).
 - Include reference header + index.d.ts check note.
-- Provide execution snippet (e.g., `frida -l script.js -U -f <pkg>`).
-  * For remote JS debugging, use V8 runtime + debug: `frida --runtime=v8 --debug -l script.js -U -f <pkg>` to enable the Node.js-compatible script debugger and attach via `Chrome DevTools`.
+- Provide an execution snippet built from the CLI invocation cues above (e.g., `frida -l script.js -f <pkg>`).
 - If output is long or multi-stage, present MVP first, then optional enhancements/stealth measures.
 
 ## Reference resources (read when needed)
-- Frida CLI tooling and workflows: https://github.com/frida/frida-tools (reference for `frida`, `frida-trace`, `frida-discover`, etc.).
+- CLI plumbing (device/target flags, spawn gating, typed options): https://github.com/frida/frida-tools/blob/main/frida_tools/application.py
+- Trace profile specs, handler stub generation, and repository reload logic: https://github.com/frida/frida-tools/blob/main/frida_tools/tracer.py
 - Frida JS script unit test patterns: https://github.com/frida/frida-gum/blob/main/tests/gumjs/script.c (useful for assertion style, hooking behavior checks).
