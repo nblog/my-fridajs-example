@@ -11,7 +11,7 @@
 // Dispatcher: pick exactly one of the two hook groups above.
 // Set HOOK_TARGET to 'ZwCreateUserProcess' or 'CreateProcessInternalW'.
 // ============================================================================
-const HOOK_TARGET = 'ZwCreateUserProcess';
+const HOOK_TARGET = 'CreateProcessInternalW';
 
 if (HOOK_TARGET === 'ZwCreateUserProcess') {
     installZwCreateUserProcessHook();
