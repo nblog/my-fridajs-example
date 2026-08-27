@@ -119,37 +119,6 @@ function dirname(path) {
     return idx === -1 ? path : trimmed.slice(0, idx + 1);
 }
 
-/**
- * 从命令行字符串中解析出第一个 token(即可执行文件完整路径)。
- * 支持带引号("C:\path\app.exe" args)与不带引号(C:\path\app.exe args)两种形式。
- */
-function getExePathFromCommandLine() {
-    /** 获取当前进程完整命令行(GetCommandLineW) */
-    function getCurrentCommandLine() {
-        const getCommandLineW = new NativeFunction(
-            Process.getModuleByName('kernel32.dll').getExportByName('GetCommandLineW'),
-            'pointer', []
-        );
-        const p = getCommandLineW();
-        return p.isNull() ? '' : p.readUtf16String();
-    }
-
-    const cmdLine = getCurrentCommandLine();
-
-    if (!cmdLine) return '';
-    let i = 0;
-    while (i < cmdLine.length && (cmdLine[i] === ' ' || cmdLine[i] === '\t')) i++;
-    if (i >= cmdLine.length) return '';
-
-    if (cmdLine[i] === '"') {
-        const end = cmdLine.indexOf('"', i + 1);
-        return end === -1 ? '' : cmdLine.slice(i + 1, end);
-    }
-
-    const end = cmdLine.search(/[ \t]/);
-    return end === -1 ? cmdLine.slice(i) : cmdLine.slice(i, end);
-}
-
 /** 读取进程环境变量(如 USERPROFILE、SystemRoot)。 */
 function getEnvironmentVariable(name) {
     const getEnvironmentVariableW = new NativeFunction(
@@ -163,31 +132,34 @@ function getEnvironmentVariable(name) {
     return buf.readUtf16String();
 }
 
+/**
+ * x64dbg 的 release 目录("属性"的存储槽)。
+ * rpc.exports 只支持函数导出,不支持属性,因此用
+ * get/set 函数对来模拟一个可覆盖的属性:
+ *   - rpc.exports.x64dbgdir()      -> getter
+ *   - rpc.exports.setx64dbgdir(dir)  -> setter(传 null/'' 恢复默认)
+ */
+let _x64dbgdir = null;
+
+/** 默认 x64dbg release 目录 */
+function defaultX64dbgDir() {
+    return Process.getHomeDir() + '\\Downloads\\Tools\\x64dbg\\release\\';
+}
+
 rpc.exports = {
     x64dbgdir() {
-        return Process.getHomeDir() + '\\Downloads\\Tools\\x64dbg\\release\\';
-
-        //   e.g. "...\release\x64\x64dbg.exe" -> "...\release\x64\" -> "...\release\"
-        const exePath = getExePathFromCommandLine();
-        if (exePath) {
-            const dir = dirname(dirname(exePath));
-            if (dir && dir !== exePath) {
-                console.log(`[+] x64dbgdir: from command line ("${exePath}") -> ${dir}`);
-                return dir;
-            }
-        }
-
-        //   e.g. "...\release\x64\" -> "...\release\"
-        const cwd = Process.getCurrentDir();
-        if (cwd) {
-            const dir = dirname(cwd);
-            if (dir && dir !== cwd) {
-                console.log(`[+] x64dbgdir: from current directory -> ${dir}`);
-                return dir;
-            }
-        }
+        return _x64dbgdir || defaultX64dbgDir();
     },
-    rundbg(x64dbgdir, commandline, pe32=false) {
+    setx64dbgdir(dir) {
+        if (dir === null || dir === undefined || dir === '') {
+            _x64dbgdir = null;
+            console.log(`[+] x64dbgdir: reset to default (${defaultX64dbgDir()})`);
+            return;
+        }
+        _x64dbgdir = dir;
+        console.log(`[+] x64dbgdir: overridden -> ${dir}`);
+    },
+    rundbg(x64dbgdir, commandline, pe32 = false) {
         // x64dbgdir 现指向 release 目录
         const exePath = x64dbgdir + (pe32 ? 'x32\\x32dbg.exe' : 'x64\\x64dbg.exe');
         console.log(`[*] rundbg: launching ${exePath}`);
