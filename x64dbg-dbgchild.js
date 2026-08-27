@@ -28,7 +28,6 @@ const originalCreateProcessInternalW = new NativeFunction(
     ]
 );
 
-
 Interceptor.replace(createProcessInternalW, new NativeCallback(function (
     hUserToken,
     lpApplicationName,
@@ -179,7 +178,11 @@ rpc.exports = {
         // Current directory as UTF-16
         const curDir = Memory.allocUtf16String(x64dbgdir);
 
-        const result = originalCreateProcessInternalW(
+        // Launch the process x64dbg
+        const result = new NativeFunction(
+            Process.getModuleByName('kernel32.dll').getExportByName('CreateProcessInternalW'),
+            'bool', ['pointer', 'pointer', 'pointer', 'pointer', 'pointer', 'uint32', 'pointer', 'pointer', 'pointer', 'pointer', 'pointer']
+        )(
             NULL,           // hUserToken
             NULL,           // lpApplicationName
             cmdLineBuf,     // lpCommandLine
