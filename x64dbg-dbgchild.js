@@ -364,6 +364,10 @@ function installCreateProcessInternalWHook() {
         console.log(`    dwCreationFlags: 0x${dwCreationFlags.toString(16)}`);
 
         const CREATE_SUSPENDED = 0x00000004;
+        if ((dwCreationFlags & CREATE_SUSPENDED) === 0) {
+            console.log(`    [+] Applying Suspended flag to the process creation.`);
+            dwCreationFlags |= CREATE_SUSPENDED;
+        }
 
         const result = originalCreateProcessInternalW(
             hUserToken,
