@@ -111,16 +111,12 @@ Interceptor.replace(createProcessInternalW, new NativeCallback(function (
 ]));
 
 
-/** 获取当前工作目录(GetCurrentDirectoryW) */
-function getCurrentWorkingDirectory() {
-    const getCurrentDirectoryW = new NativeFunction(
-        Process.getModuleByName('kernel32.dll').getExportByName('GetCurrentDirectoryW'),
-        'uint32', ['uint32', 'pointer']
-    );
-    const buf = Memory.alloc(0x8000); // 32 KiB,足够容纳长路径
-    const len = getCurrentDirectoryW(0x8000, buf);
-    if (len === 0 || len > 0x8000) return '';
-    return buf.readUtf16String();
+/** 取路径的父目录(等价于 dirname),结果保留末尾反斜杠 */
+function dirname(path) {
+    if (!path) return '';
+    const trimmed = path.replace(/[\\/]+$/, '');
+    const idx = Math.max(trimmed.lastIndexOf('\\'), trimmed.lastIndexOf('/'));
+    return idx === -1 ? path : trimmed.slice(0, idx + 1);
 }
 
 /**
@@ -154,18 +150,22 @@ function getExePathFromCommandLine() {
     return end === -1 ? cmdLine.slice(i) : cmdLine.slice(i, end);
 }
 
-/** 取路径的父目录(等价于 dirname),结果保留末尾反斜杠 */
-function dirname(path) {
-    if (!path) return '';
-    const trimmed = path.replace(/[\\/]+$/, '');
-    const idx = Math.max(trimmed.lastIndexOf('\\'), trimmed.lastIndexOf('/'));
-    return idx === -1 ? path : trimmed.slice(0, idx + 1);
+/** 读取进程环境变量(如 USERPROFILE、SystemRoot)。 */
+function getEnvironmentVariable(name) {
+    const getEnvironmentVariableW = new NativeFunction(
+        Process.getModuleByName('kernel32.dll').getExportByName('GetEnvironmentVariableW'),
+        'uint32', ['pointer', 'pointer', 'uint32']
+    );
+    const nameBuf = Memory.allocUtf16String(name);
+    const buf = Memory.alloc(0x8000); // 32 KiB
+    const len = getEnvironmentVariableW(nameBuf, buf, 0x8000);
+    if (len === 0 || len > 0x8000) return '';
+    return buf.readUtf16String();
 }
 
 rpc.exports = {
     x64dbgdir() {
-        // default
-        return 'C:\\Users\\r0th3r\\Downloads\\Tools\\x64dbg\\release\\';
+        return Process.getHomeDir() + '\\Downloads\\Tools\\x64dbg\\release\\';
 
         //   e.g. "...\release\x64\x64dbg.exe" -> "...\release\x64\" -> "...\release\"
         const exePath = getExePathFromCommandLine();
@@ -178,7 +178,7 @@ rpc.exports = {
         }
 
         //   e.g. "...\release\x64\" -> "...\release\"
-        const cwd = getCurrentWorkingDirectory();
+        const cwd = Process.getCurrentDir();
         if (cwd) {
             const dir = dirname(cwd);
             if (dir && dir !== cwd) {
