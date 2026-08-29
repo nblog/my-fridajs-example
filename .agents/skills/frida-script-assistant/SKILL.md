@@ -137,6 +137,21 @@ function main() {
 - JavaScript API Doc: https://frida.re/docs/javascript-api/#table-of-contents
 - [`Interceptor`](https://github.com/frida/frida-website/blob/main/_i18n/en/_docs/javascript-api.md#instruction) for hooking functions, [`NativeFunction`](https://github.com/frida/frida-website/blob/main/_i18n/en/_docs/javascript-api.md#nativefunction) for calling exports/pointers (prefer explicit-width types: `bool`, `size_t/ssize_t`, `uint8/16/32/64`, `int8/16/32/64` over platform-dependent `uint/int`, `ulong/long`, `uchar/char`), [`Module.enumerateExports/Imports`](https://github.com/frida/frida-website/blob/main/_i18n/en/_docs/javascript-api.md#module) for discovery, [`Memory.read/write/patch`](https://github.com/frida/frida-website/blob/main/_i18n/en/_docs/javascript-api.md#memory) for data capture or inline patching, [`Stalker`](https://github.com/frida/frida-website/blob/main/_i18n/en/_docs/javascript-api.md#stalker) for instruction-level tracing, `Java/ObjC` runtime APIs when on Android/iOS.
 
+### Native error-status guidance
+- When a task needs the error status produced by a native call, prefer [`SystemFunction`](https://frida.re/docs/javascript-api/#systemfunction) over `NativeFunction`. `NativeFunction` does not provide a reliable cross-runtime snapshot of Windows `GetLastError()` or Unix `errno`; Frida may run housekeeping or other native code before JavaScript reads the result.
+- Read the status from the object returned by the same `SystemFunction` call. Use `result.lastError` on Windows and `result.errno` on Unix:
+
+  ```js
+  const api = new SystemFunction(address, returnType, argumentTypes);
+  const result = api(...args);
+
+  console.log(result.value);
+  console.log(result.lastError);
+  ```
+
+- Do not call `GetLastError()` through a second `NativeFunction` after the first call returns; that is a separate JavaScript/native boundary and may observe a clobbered value. `SystemFunction` snapshots the calling thread's error state immediately after its native call, but it cannot make the thread-local value persist across later JavaScript operations.
+- For an API already being observed with `Interceptor`, use the invocation context's `this.lastError` on Windows or `this.errno` on Unix in `onEnter`/`onLeave`. Keep the thread-local nature of these values in mind, and still verify the API's documented error-setting behavior and the native ABI/signature.
+
 ## CLI invocation cues (`frida`)
 Pick device and target flags that match the clarified platform/target. Only one of `-D`, `-U`, `-R`, `-H` is accepted.
 
