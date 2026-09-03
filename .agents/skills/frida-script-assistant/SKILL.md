@@ -65,7 +65,7 @@ const log = function (tag, ...args) {
 };
 
 // Backtrace helper: returns formatted call stack with module+offset
-function bt(ctx, limit = 8) {
+function bt(ctx, limit = 5) {
   return Thread.backtrace(ctx, Backtracer.ACCURATE)
     .slice(0, limit)
     .map(addr => {
@@ -121,16 +121,20 @@ function hookExport(moduleName, exportName) {
   });
 }
 
-function main() {
-  // hookExport('libc.so', 'read');
-}
+rpc.exports = {
+    init(stage, options: Parameters) {
+      // hookExport('libc.so', 'read');
+    },
+    dispose() {
+    }
+};
 ```
 
 ## TypeScript agent pointers
 - Clone starter: `git clone https://github.com/oleavr/frida-agent-example` then `cd frida-agent-example`.
 - Init deps: `npm install` (assumes Node toolchain present).
 - Build: `npm run build`.
-- Run: `frida -l _agent.js -U -f com.example.android`.
+- Run: `frida -l build/_agent.js -U -f com.example.android`.
 - In `agent/index.ts`, keep the same logging; export minimal API surface. Map helpers (address resolvers, Java helpers) as needed.
 
 ## Common API cues
