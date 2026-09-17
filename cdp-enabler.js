@@ -46,9 +46,9 @@ function findVtable(chromeDll, createForHttpServerAddr) {
 
   const CONFIG = {
     moduleName: Process.mainModule.name,
-    createForHttpServer: 0, // TCPServerSocketFactory::CreateForHttpServer
-    startRemoteDebuggingServer: 0, // content::DevToolsAgentHost::StartRemoteDebuggingServer
     operatorNew: 0, // void * __cdecl operator new(unsigned __int64)
+    startRemoteDebuggingServer: 0, // content::DevToolsAgentHost::StartRemoteDebuggingServer
+    createForHttpServer: 0, // TCPServerSocketFactory::CreateForHttpServer
   };
 
   const chromeDll = Process.getModuleByName(CONFIG.moduleName);
