@@ -8,6 +8,14 @@
 
 const CDP_PORT = 9222;
 
+// TCPServerSocketFactory layout (Chrome uses libc++ std::string):
+//   x64: vftable @0x00 (8B), std::string @0x08 (24B), port @0x20, total 40
+//   x86: vftable @0x00 (4B), std::string @0x04 (12B), port @0x10, total 20
+const IS64 = Process.pointerSize === 8;
+const FACTORY_SIZE = IS64 ? 40 : 20;
+const STRING_OFF = Process.pointerSize;
+const PORT_OFF = STRING_OFF + (IS64 ? 24 : 12);
+
 const log = function (tag, ...args) {
   const tid = Process.getCurrentThreadId();
   const ts = new Date().toISOString().slice(11, 19);
@@ -23,7 +31,7 @@ function findVtable(chromeDll, createForHttpServerAddr) {
 
   log('vtable', `Scanning .rdata...`);
 
-  for (let offset = 0; offset < rdata.size - 16; offset += 8) {
+  for (let offset = 0; offset < rdata.size - Process.pointerSize * 2; offset += Process.pointerSize) {
     try {
       const addr = rdata.address.add(offset);
       const entry1 = addr.add(Process.pointerSize).readPointer();
@@ -70,18 +78,18 @@ function findVtable(chromeDll, createForHttpServerAddr) {
 
   log('cdp', 'Starting CDP...');
 
-  const factory = new NativeFunction(operatorNewAddr, 'pointer', ['size_t'])(40);
+  const factory = new NativeFunction(operatorNewAddr, 'pointer', ['size_t'], 'mscdecl')(FACTORY_SIZE);
   if (factory.isNull()) {
     log('error', 'allocation failed');
     return;
   }
 
   // TCPServerSocketFactory
-  factory.writeByteArray(new Uint8Array(40).fill(0));
+  factory.writeByteArray(new Uint8Array(FACTORY_SIZE).fill(0));
   factory.add(0).writePointer(vtableAddr);
-  factory.add(8).writeU8(18); // std::string SSO
-  factory.add(8 + 1).writeUtf8String('127.0.0.1');
-  factory.add(32).writeU16(CDP_PORT);
+  factory.add(STRING_OFF).writeU8('127.0.0.1'.length << 1); // libc++ std::string SSO size<<1 (18)
+  factory.add(STRING_OFF + 1).writeUtf8String('127.0.0.1');
+  factory.add(PORT_OFF).writeU16(CDP_PORT);
 
   log('factory', `object @ ${factory}`);
 
@@ -94,11 +102,14 @@ function findVtable(chromeDll, createForHttpServerAddr) {
   try {
     // content::DevToolsAgentHost::StartRemoteDebuggingServer
     // void(unique_ptr<TCPServerSocketFactory>*, FilePath*, FilePath*)
+    // base::FilePath holds one std::string: 24B on x64, 12B on x86
+    const filePathSize = STRING_OFF + (IS64 ? 16 : 8);
     new NativeFunction(
       startRemoteDebuggingServerAddr,
       'void',
-      ['pointer', 'pointer', 'pointer']
-    )(factoryPtrStorage, Memory.alloc(24), Memory.alloc(24));
+      ['pointer', 'pointer', 'pointer'],
+      (IS64 ? 'win64' : 'mscdecl')
+    )((IS64 ? factoryPtrStorage : factory), Memory.alloc(filePathSize), Memory.alloc(filePathSize));
     log('success', `CDP enabled! Test: curl http://127.0.0.1:${CDP_PORT}/json/version`);
   } catch (e) {
     log('error', `Failed: ${e.message}`);
