@@ -78,7 +78,7 @@ function findVtable(chromeDll, createForHttpServerAddr) {
 
   log('cdp', 'Starting CDP...');
 
-  const factory = new NativeFunction(operatorNewAddr, 'pointer', ['size_t'], 'mscdecl')(FACTORY_SIZE);
+  const factory = new NativeFunction(operatorNewAddr, 'pointer', ['size_t'], (IS64 ? 'win64' : 'mscdecl'))(FACTORY_SIZE);
   if (factory.isNull()) {
     log('error', 'allocation failed');
     return;
