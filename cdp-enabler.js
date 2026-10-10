@@ -180,7 +180,7 @@ function getJson(path) {
 }
 
 /** Evaluate in one page selected by exact filter fields; retain the CDP RemoteObject result. */
-export function exec_js(expression = DEFAULT_JS, filter = { title: 'Electron' }) {
+export function exec_js(filter = { title: 'Electron' }, expression = DEFAULT_JS) {
   expression ??= DEFAULT_JS;
   filter ??= { title: 'Electron' };
   const pages = getJson('/json/list').filter(page => page.type === 'page');
